@@ -13,28 +13,19 @@ from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine
 from rasterio.warp import calculate_default_transform, reproject, Resampling
+from shapely import Point, Polygon
 from sklearn.preprocessing import StandardScaler
 from typing import (
     Any,
     Callable,
     Iterable,
     List,
-    NamedTuple,
     Optional,
     Tuple,
     Union,
     overload,
 )
 from glidergun.literals import ColorMap, DataType
-
-
-class Point(NamedTuple):
-    x: float
-    y: float
-
-
-class Polygon(NamedTuple):
-    coordinates: List[List[Point]]
 
 
 class Extent(Tuple[float, float, float, float]):
@@ -581,7 +572,21 @@ class Grid:
         for shape, value in features.shapes(
             self.data, mask=np.isfinite(self.data), transform=self.transform
         ):
-            yield Polygon(shape["coordinates"]), value
+            coordinates = shape["coordinates"]
+            yield Polygon(coordinates[0], coordinates[1:]), value
+
+    def from_polygons(
+        self, polygons: Iterable[Tuple[Polygon, Value]], all_touched: bool = False
+    ):
+        array = features.rasterize(
+            shapes=polygons,
+            out_shape=self.data.shape,
+            fill=np.nan,  # type: ignore
+            transform=self.transform,
+            all_touched=all_touched,
+            default_value=np.nan,  # type: ignore
+        )
+        return self._create(array)
 
     def scale(self, **fit_params):
         return self.local(lambda a: StandardScaler().fit_transform(a, **fit_params))
