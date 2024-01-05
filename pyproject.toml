@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "glidergun"
+version = "0.3.0"
+authors = [
+  { name="Jiro Shirota", email="jshirota@gmail.com" },
+]
+description = "Map Algebra with NumPy"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "folium",
+    "matplotlib",
+    "numpy",
+    "rasterio",
+    "scikit-learn",
+    "scipy",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/jshirota/glidergun"
+"Bug Tracker" = "https://github.com/jshirota/glidergun/issues"

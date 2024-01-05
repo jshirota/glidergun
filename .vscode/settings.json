@@ -1,0 +1,17 @@
+{
+    "editor.renderWhitespace": "all",
+    "editor.tabSize": 4,
+    "flake8.args": [
+        "--max-line-length=120",
+        "--ignore=F401,W503",
+    ],
+    "python.analysis.typeCheckingMode": "basic",
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./tests",
+        "-p",
+        "*test.py"
+    ],
+    "python.testing.unittestEnabled": true
+}
