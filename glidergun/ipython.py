@@ -3,7 +3,8 @@ import numpy as np
 from base64 import b64encode
 from io import BytesIO
 from typing import Optional, Union
-from glidergun.core import Grid, Stack
+from glidergun.core import Grid
+from glidergun.stack import Stack
 
 
 def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):

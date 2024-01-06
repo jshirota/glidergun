@@ -2,12 +2,11 @@ import glidergun.ipython
 import glidergun.scipy as scipy
 import glidergun.sklearn as sklearn
 from glidergun.core import (
-    grid,
-    stack,
     Grid,
-    Stack,
     Extent,
+    Prediction,
     Resampling,
+    grid,
     con,
     mean,
     std,
@@ -15,3 +14,4 @@ from glidergun.core import (
     maximum,
     mosaic,
 )
+from glidergun.stack import Stack, stack

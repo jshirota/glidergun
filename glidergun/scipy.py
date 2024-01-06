@@ -1,5 +1,5 @@
-import scipy as sp
 import typing
+import scipy as sp
 from glidergun.core import Grid, Value, _batch, _focal
 
 

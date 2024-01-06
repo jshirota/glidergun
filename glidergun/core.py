@@ -1,10 +1,24 @@
 import dataclasses
 import hashlib
-import numpy as np
-import rasterio
+import pickle
 import sys
 import warnings
+import numpy as np
+import rasterio
 from dataclasses import dataclass
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    TypeVar,
+    Union,
+    overload,
+)
 from numpy import arctan, arctan2, cos, gradient, ndarray, pi, sin, sqrt
 from numpy.lib.stride_tricks import sliding_window_view
 from rasterio import features
@@ -15,16 +29,6 @@ from rasterio.transform import Affine
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 from shapely import Point, Polygon
 from sklearn.preprocessing import StandardScaler
-from typing import (
-    Any,
-    Callable,
-    Iterable,
-    List,
-    Optional,
-    Tuple,
-    Union,
-    overload,
-)
 from glidergun.literals import ColorMap, DataType
 
 
@@ -46,6 +50,56 @@ class Extent(Tuple[float, float, float, float]):
 
 Operand = Union["Grid", float, int]
 Value = Union[float, int]
+
+
+class Model(Protocol):
+    fit: Callable
+    score: Callable
+    predict: Callable
+
+
+T = TypeVar("T", bound=Model)
+
+
+class Prediction(Generic[T]):
+    def __init__(self, model: T) -> None:
+        self.model: T = model
+        self._dtype: DataType = "float32"
+
+    def fit(self, dependent_grid: "Grid", *explanatory_grids: "Grid"):
+        head, *tail = self._flatten(*[dependent_grid, *explanatory_grids])
+        self.model = self.model.fit(
+            np.array([g.data.ravel() for g in tail]).transpose(1, 0),
+            head.data.ravel(),
+        )
+        self._dtype = dependent_grid.dtype
+        return self
+
+    def score(self, dependent_grid: "Grid", *explanatory_grids: "Grid") -> float:
+        head, *tail = self._flatten(dependent_grid, *explanatory_grids)
+        return self.model.score(
+            np.array([g.data.ravel() for g in tail]).transpose(1, 0), head.data.ravel()
+        )
+
+    def predict(self, *explanatory_grids: "Grid") -> "Grid":
+        grids = self._flatten(*explanatory_grids)
+        array = self.model.predict(
+            np.array([g.data.ravel() for g in grids]).transpose(1, 0)
+        )
+        grid = grids[0]
+        return grid._create(array.reshape((grid.height, grid.width))).type(self._dtype)
+
+    def _flatten(self, *grids: "Grid"):
+        return [con(g.is_nan(), g.mean, g) for g in _standardize(True, *grids)]
+
+    def save(self, file: str):
+        with open(file, "wb") as f:
+            pickle.dump(self.model, f)
+
+    @classmethod
+    def load(cls, file: str):
+        with open(file, "rb") as f:
+            return Prediction(pickle.load(f))
 
 
 @dataclass(frozen=True)
@@ -591,6 +645,9 @@ class Grid:
     def scale(self, **fit_params):
         return self.local(lambda a: StandardScaler().fit_transform(a, **fit_params))
 
+    def fit(self, model: T, *explanatory_grids: "Grid") -> Prediction[T]:
+        return Prediction(model).fit(self, *explanatory_grids)
+
     def plot(self, cmap: ColorMap):
         return dataclasses.replace(self, _cmap=cmap)
 
@@ -898,190 +955,3 @@ def _nodata(dtype: str) -> Optional[Value]:
     if dtype.startswith("uint"):
         return np.iinfo(dtype).max
     return np.iinfo(dtype).min
-
-
-@dataclass(frozen=True)
-class Stack:
-    grids: Tuple[Grid, ...]
-    _rgb: Tuple[int, int, int] = (1, 2, 3)
-
-    def __repr__(self):
-        g = self.grids[0]
-        return (
-            f"image: {g.width}x{g.height} {g.dtype} | "
-            + f"crs: {g.crs} | "
-            + f"cell: {g.cell_size} | "
-            + f"count: {len(self.grids)}"
-        )
-
-    @property
-    def width(self) -> int:
-        return self.grids[0].width
-
-    @property
-    def height(self) -> int:
-        return self.grids[0].height
-
-    @property
-    def dtype(self) -> DataType:
-        return self.grids[0].dtype
-
-    @property
-    def xmin(self) -> float:
-        return self.grids[0].xmin
-
-    @property
-    def ymin(self) -> float:
-        return self.grids[0].ymin
-
-    @property
-    def xmax(self) -> float:
-        return self.grids[0].xmax
-
-    @property
-    def ymax(self) -> float:
-        return self.grids[0].ymax
-
-    @property
-    def cell_size(self) -> float:
-        return self.grids[0].cell_size
-
-    @property
-    def extent(self) -> Extent:
-        return self.grids[0].extent
-
-    def scale(self, **fit_params):
-        return self.each(lambda g: g.scale(**fit_params))
-
-    def plot(self, *rgb: int):
-        return dataclasses.replace(self, _rgb=rgb)
-
-    def map(
-        self,
-        rgb: Tuple[int, int, int] = (1, 2, 3),
-        opacity: float = 1.0,
-        folium_map=None,
-        width: int = 800,
-        height: int = 600,
-        basemap: Optional[str] = None,
-        attribution: Optional[str] = None,
-        grayscale: bool = True,
-        **kwargs,
-    ):
-        from glidergun.ipython import _map
-
-        return _map(
-            self,
-            rgb,
-            opacity,
-            folium_map,
-            width,
-            height,
-            basemap,
-            attribution,
-            grayscale,
-            **kwargs,
-        )
-
-    def each(self, func: Callable[[Grid], Grid]):
-        return stack(*map(func, self.grids))
-
-    def clip(self, extent: Tuple[float, float, float, float]):
-        return self.each(lambda g: g.clip(extent))
-
-    def project(
-        self, epsg: Union[int, CRS], resampling: Resampling = Resampling.nearest
-    ):
-        return self.each(lambda g: g.project(epsg, resampling))
-
-    def resample(self, cell_size: float, resampling: Resampling = Resampling.nearest):
-        return self.each(lambda g: g.resample(cell_size, resampling))
-
-    def zip_with(self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid]):
-        grids = []
-        for grid1, grid2 in zip(self.grids, other_stack.grids):
-            grid1, grid2 = _standardize(True, grid1, grid2)
-            grids.append(func(grid1, grid2))
-        return stack(*grids)
-
-    def values(self, x: float, y: float):
-        return tuple(grid.value(x, y) for grid in self.grids)
-
-    @overload
-    def save(self, file: str, dtype: Optional[DataType] = None, driver: str = ""):
-        ...
-
-    @overload
-    def save(
-        self, file: MemoryFile, dtype: Optional[DataType] = None, driver: str = ""
-    ):
-        ...
-
-    def save(self, file, dtype: Optional[DataType] = None, driver: str = ""):
-        g = self.grids[0]
-
-        if dtype is None:
-            dtype = self.dtype
-
-        nodata = _nodata(dtype)
-
-        grids = (
-            self.grids
-            if nodata is None
-            else self.each(lambda g: con(g.is_nan(), nodata, g)).grids
-        )
-
-        if isinstance(file, str):
-            with rasterio.open(
-                file,
-                "w",
-                driver=driver if driver else driver_from_extension(file),
-                count=len(grids),
-                dtype=dtype,
-                nodata=nodata,
-                **_metadata(g),
-            ) as dataset:
-                for index, grid in enumerate(grids):
-                    dataset.write(grid.data, index + 1)
-        elif isinstance(file, MemoryFile):
-            with file.open(
-                driver=driver if driver else "GTiff",
-                count=len(grids),
-                dtype=dtype,
-                nodata=nodata,
-                **_metadata(g),
-            ) as dataset:
-                for index, grid in enumerate(grids):
-                    dataset.write(grid.data, index + 1)
-
-
-@overload
-def stack(*grids: str) -> Stack:
-    ...
-
-
-@overload
-def stack(*grids: MemoryFile) -> Stack:
-    ...
-
-
-@overload
-def stack(*grids: Grid) -> Stack:
-    ...
-
-
-def stack(*grids) -> Stack:
-    bands: List[Grid] = []
-
-    for grid in grids:
-        if isinstance(grid, Grid):
-            bands.append(grid)
-        else:
-            with rasterio.open(grid) if isinstance(
-                grid, str
-            ) else grid.open() as dataset:
-                for index in dataset.indexes:
-                    band = _read(dataset, index)
-                    bands.append(band)
-
-    return Stack(tuple(_standardize(True, *bands)))
