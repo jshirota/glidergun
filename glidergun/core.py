@@ -343,6 +343,11 @@ class Grid:
     def arctan(self):
         return self.local(np.arctan)
 
+    def log(self, base: Optional[float] = None):
+        if base is None:
+            return self.local(np.log)
+        return self.local(lambda a: np.log(a) / np.log(base))
+
     def round(self, decimals: int = 0):
         return self.local(lambda a: np.round(a, decimals))
 
@@ -692,6 +697,9 @@ class Grid:
         if self.dtype == dtype:
             return self
         return self.local(lambda data: np.asanyarray(data, dtype=dtype))
+
+    def to_int(self):
+        return self.local(np.rint).type("int32")
 
     @overload
     def save(self, file: str, dtype: Optional[DataType] = None, driver: str = ""):
