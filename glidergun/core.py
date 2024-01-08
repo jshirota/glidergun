@@ -28,7 +28,7 @@ from rasterio.io import MemoryFile
 from rasterio.transform import Affine
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 from shapely import Point, Polygon
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import QuantileTransformer
 from glidergun.literals import ColorMap, DataType
 
 
@@ -52,18 +52,18 @@ Operand = Union["Grid", float, int]
 Value = Union[float, int]
 
 
-class Model(Protocol):
+class Predictor(Protocol):
     fit: Callable
     score: Callable
     predict: Callable
 
 
-T = TypeVar("T", bound=Model)
+TPredictor = TypeVar("TPredictor", bound=Predictor)
 
 
-class Prediction(Generic[T]):
-    def __init__(self, model: T) -> None:
-        self.model: T = model
+class Prediction(Generic[TPredictor]):
+    def __init__(self, model: TPredictor) -> None:
+        self.model: TPredictor = model
         self._dtype: DataType = "float32"
 
     def fit(self, dependent_grid: "Grid", *explanatory_grids: "Grid"):
@@ -100,6 +100,12 @@ class Prediction(Generic[T]):
     def load(cls, file: str):
         with open(file, "rb") as f:
             return Prediction(pickle.load(f))
+
+
+class Scaler(Protocol):
+    fit: Callable
+    transform: Callable
+    fit_transform: Callable
 
 
 @dataclass(frozen=True)
@@ -642,10 +648,14 @@ class Grid:
         )
         return self._create(array)
 
-    def scale(self, **fit_params):
-        return self.local(lambda a: StandardScaler().fit_transform(a, **fit_params))
+    def scale(self, scaler: Optional[Scaler] = None, **fit_params):
+        if not scaler:
+            scaler = QuantileTransformer(n_quantiles=10)
+        return self.local(lambda a: scaler.fit_transform(a, **fit_params))
 
-    def fit(self, model: T, *explanatory_grids: "Grid") -> Prediction[T]:
+    def fit(
+        self, model: TPredictor, *explanatory_grids: "Grid"
+    ) -> Prediction[TPredictor]:
         return Prediction(model).fit(self, *explanatory_grids)
 
     def plot(self, cmap: ColorMap):

@@ -1,4 +1,5 @@
 import dataclasses
+import warnings
 import rasterio
 from dataclasses import dataclass
 from typing import (
@@ -13,8 +14,19 @@ from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
-from glidergun.core import Extent, Grid, _metadata, _nodata, _read, _standardize, con
+from glidergun.core import (
+    Grid,
+    Extent,
+    Scaler,
+    _metadata,
+    _nodata,
+    _read,
+    _standardize,
+    con,
+)
 from glidergun.literals import DataType
+
+Operand = Union["Stack", Grid, float, int]
 
 
 @dataclass(frozen=True)
@@ -67,8 +79,117 @@ class Stack:
     def extent(self) -> Extent:
         return self.grids[0].extent
 
-    def scale(self, **fit_params):
-        return self.each(lambda g: g.scale(**fit_params))
+    def __add__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__add__(n))
+
+    __radd__ = __add__
+
+    def __sub__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__sub__(n))
+
+    def __rsub__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__rsub__(n))
+
+    def __mul__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__mul__(n))
+
+    __rmul__ = __mul__
+
+    def __pow__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__pow__(n))
+
+    def __rpow__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__rpow__(n))
+
+    def __truediv__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__truediv__(n))
+
+    def __rtruediv__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__rtruediv__(n))
+
+    def __floordiv__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__floordiv__(n))
+
+    def __rfloordiv__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__rfloordiv__(n))
+
+    def __mod__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__mod__(n))
+
+    def __rmod__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__rmod__(n))
+
+    def __lt__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__lt__(n))
+
+    def __gt__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__gt__(n))
+
+    __rlt__ = __gt__
+
+    __rgt__ = __lt__
+
+    def __le__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__le__(n))
+
+    def __ge__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__ge__(n))
+
+    __rle__ = __ge__
+
+    __rge__ = __le__
+
+    def __eq__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__eq__(n))
+
+    __req__ = __eq__
+
+    def __ne__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__ne__(n))
+
+    __rne__ = __ne__
+
+    def __and__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__and__(n))
+
+    __rand__ = __and__
+
+    def __or__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__or__(n))
+
+    __ror__ = __or__
+
+    def __xor__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__xor__(n))
+
+    __rxor__ = __xor__
+
+    def __rshift__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__rshift__(n))
+
+    def __lshift__(self, n: Operand):
+        return self._apply(n, lambda g, n: g.__lshift__(n))
+
+    __rrshift__ = __lshift__
+
+    __rlshift__ = __rshift__
+
+    def __neg__(self):
+        return self.each(lambda g: g.__neg__())
+
+    def __pos__(self):
+        return self.each(lambda g: g.__pos__())
+
+    def __invert__(self):
+        return self.each(lambda g: g.__invert__())
+
+    def _apply(self, n: Operand, op: Callable):
+        if isinstance(n, Stack):
+            return self.zip_with(n, lambda g1, g2: op(g1, g2))
+        return self.each(lambda g: op(g, n))
+
+    def scale(self, scaler: Optional[Scaler] = None, **fit_params):
+        return self.each(lambda g: g.scale(scaler, **fit_params))
 
     def plot(self, *rgb: int):
         return dataclasses.replace(self, _rgb=rgb)
@@ -101,7 +222,9 @@ class Stack:
         )
 
     def each(self, func: Callable[[Grid], Grid]):
-        return stack(*map(func, self.grids))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            return stack(*map(func, self.grids))
 
     def clip(self, extent: Tuple[float, float, float, float]):
         return self.each(lambda g: g.clip(extent))
@@ -123,6 +246,9 @@ class Stack:
 
     def values(self, x: float, y: float):
         return tuple(grid.value(x, y) for grid in self.grids)
+
+    def type(self, dtype: DataType):
+        return self.each(lambda g: g.type(dtype))
 
     @overload
     def save(self, file: str, dtype: Optional[DataType] = None, driver: str = ""):
