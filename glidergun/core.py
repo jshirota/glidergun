@@ -698,9 +698,6 @@ class Grid:
             return self
         return self.local(lambda data: np.asanyarray(data, dtype=dtype))
 
-    def to_int(self):
-        return self.local(np.rint).type("int32")
-
     @overload
     def save(self, file: str, dtype: Optional[DataType] = None, driver: str = ""):
         ...

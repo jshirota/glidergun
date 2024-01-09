@@ -18,7 +18,12 @@ def pca(n_components: int = 1, *grids: Grid) -> typing.Tuple[Grid, ...]:
     arrays = (
         sklearn.decomposition.PCA(n_components=n_components)
         .fit_transform(
-            np.array([g.scale().data.ravel() for g in grids_adjusted]).transpose((1, 0))
+            np.array(
+                [
+                    g.scale(sklearn.preprocessing.StandardScaler()).data.ravel()
+                    for g in grids_adjusted
+                ]
+            ).transpose((1, 0))
         )
         .transpose((1, 0))
     )
