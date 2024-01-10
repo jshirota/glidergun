@@ -1,6 +1,5 @@
 import glidergun.ipython
 import glidergun.scipy as scipy
-import glidergun.sklearn as sklearn
 from glidergun.core import (
     Grid,
     Extent,
@@ -13,5 +12,7 @@ from glidergun.core import (
     minimum,
     maximum,
     mosaic,
+    pca,
+    standardize,
 )
 from glidergun.stack import Stack, stack

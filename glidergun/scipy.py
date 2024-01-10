@@ -108,7 +108,7 @@ def focal_mode(
     grid: Grid, buffer=1, circle: bool = False, ignore_nan: bool = True, **kwargs
 ):
     return grid.focal(
-        lambda a: sp.stats.mode(a, **_kwargs(ignore_nan, **kwargs)),
+        lambda a: sp.stats.mode(a, **_kwargs(ignore_nan, keepdims=True, **kwargs)),
         buffer,
         circle,
     )

@@ -12,8 +12,11 @@ from typing import (
     Generic,
     Iterable,
     List,
+    Literal,
+    Mapping,
     Optional,
     Protocol,
+    Sequence,
     Tuple,
     TypeVar,
     Union,
@@ -28,7 +31,11 @@ from rasterio.io import MemoryFile
 from rasterio.transform import Affine
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 from shapely import Point, Polygon
-from sklearn.preprocessing import QuantileTransformer
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import QuantileTransformer, StandardScaler
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from glidergun.literals import ColorMap, DataType
 
 
@@ -90,7 +97,7 @@ class Prediction(Generic[TPredictor]):
         return grid._create(array.reshape((grid.height, grid.width))).type(self._dtype)
 
     def _flatten(self, *grids: "Grid"):
-        return [con(g.is_nan(), g.mean, g) for g in _standardize(True, *grids)]
+        return [con(g.is_nan(), g.mean, g) for g in standardize(True, *grids)]
 
     def save(self, file: str):
         with open(file, "wb") as f:
@@ -312,7 +319,7 @@ class Grid:
         if left.cell_size == right.cell_size and left.extent == right.extent:
             return self._create(op(left.data, right.data))
 
-        l_adjusted, r_adjusted = _standardize(True, left, right)
+        l_adjusted, r_adjusted = standardize(True, left, right)
 
         return self._create(op(l_adjusted.data, r_adjusted.data))
 
@@ -390,6 +397,17 @@ class Grid:
     ):
         f = np.nanmedian if ignore_nan else np.median
         return self.focal(lambda a: f(a, axis=2, **kwargs), buffer, circle)
+
+    def focal_mode(
+        self,
+        buffer=1,
+        circle: bool = False,
+        ignore_nan: bool = True,
+        **kwargs,
+    ):
+        import glidergun.scipy
+
+        return glidergun.scipy.focal_mode(self, buffer, circle, ignore_nan, **kwargs)
 
     def focal_mean(
         self,
@@ -663,6 +681,187 @@ class Grid:
     ) -> Prediction[TPredictor]:
         return Prediction(model).fit(self, *explanatory_grids)
 
+    def fit_linear_regression(
+        self,
+        *explanatory_grids: "Grid",
+        fit_intercept: bool = True,
+        copy_X: bool = True,
+        n_jobs: Optional[int] = None,
+        positive: bool = False,
+    ) -> Prediction[LinearRegression]:
+        return self.fit(
+            LinearRegression(
+                fit_intercept=fit_intercept,
+                copy_X=copy_X,
+                n_jobs=n_jobs,
+                positive=positive,
+            ),
+            *explanatory_grids,
+        )
+
+    def fit_decision_tree_classification(
+        self,
+        *explanatory_grids: "Grid",
+        criterion: Literal["gini", "entropy", "log_loss"] = "gini",
+        splitter: Literal["best", "random"] = "best",
+        max_depth: Optional[int] = None,
+        min_samples_split: Union[float, int] = 2,
+        min_samples_leaf: Union[float, int] = 1,
+        min_weight_fraction_leaf: float = 0,
+        max_features: Union[float, int, Literal["auto", "sqrt", "log2"], None] = None,
+        random_state: Union[int, Any, None] = None,
+        max_leaf_nodes: Optional[int] = None,
+        min_impurity_decrease: float = 0,
+        class_weight: Union[
+            Mapping[Any, Any], str, Sequence[Mapping[Any, Any]], None
+        ] = None,
+        ccp_alpha: float = 0,
+    ) -> Prediction[DecisionTreeClassifier]:
+        return self.fit(
+            DecisionTreeClassifier(
+                criterion=criterion,
+                splitter=splitter,
+                max_depth=max_depth,
+                min_samples_split=min_samples_split,
+                min_samples_leaf=min_samples_leaf,
+                min_weight_fraction_leaf=min_weight_fraction_leaf,
+                max_features=max_features,
+                random_state=random_state,
+                max_leaf_nodes=max_leaf_nodes,
+                min_impurity_decrease=min_impurity_decrease,
+                class_weight=class_weight,
+                ccp_alpha=ccp_alpha,
+            ),
+            *explanatory_grids,
+        )
+
+    def fit_decision_tree_regression(
+        self,
+        *explanatory_grids: "Grid",
+        criterion: Literal[
+            "squared_error", "friedman_mse", "absolute_error", "poisson"
+        ] = "squared_error",
+        splitter: Literal["best", "random"] = "best",
+        max_depth: Optional[int] = None,
+        min_samples_split: Union[float, int] = 2,
+        min_samples_leaf: Union[float, int] = 1,
+        min_weight_fraction_leaf: float = 0,
+        max_features: Union[float, int, Literal["auto", "sqrt", "log2"], None] = None,
+        random_state: Union[int, Any, None] = None,
+        max_leaf_nodes: Optional[int] = None,
+        min_impurity_decrease: float = 0,
+        ccp_alpha: float = 0,
+    ) -> Prediction[DecisionTreeRegressor]:
+        return self.fit(
+            DecisionTreeRegressor(
+                criterion=criterion,
+                splitter=splitter,
+                max_depth=max_depth,
+                min_samples_split=min_samples_split,
+                min_samples_leaf=min_samples_leaf,
+                min_weight_fraction_leaf=min_weight_fraction_leaf,
+                max_features=max_features,
+                random_state=random_state,
+                max_leaf_nodes=max_leaf_nodes,
+                min_impurity_decrease=min_impurity_decrease,
+                ccp_alpha=ccp_alpha,
+            ),
+            *explanatory_grids,
+        )
+
+    def fit_random_forest_classification(
+        self,
+        *explanatory_grids: "Grid",
+        criterion: Literal["gini", "entropy", "log_loss"] = "gini",
+        max_depth: Optional[int] = None,
+        min_samples_split: Union[float, int] = 2,
+        min_samples_leaf: Union[float, int] = 1,
+        min_weight_fraction_leaf: float = 0,
+        max_features: Union[float, int, Literal["sqrt", "log2"]] = "sqrt",
+        max_leaf_nodes: Optional[int] = None,
+        min_impurity_decrease: float = 0,
+        bootstrap: bool = True,
+        oob_score: bool = False,
+        n_jobs: Optional[int] = None,
+        random_state: Union[int, Any, None] = None,
+        verbose: int = 0,
+        warm_start: bool = False,
+        class_weight: Union[
+            Mapping[Any, Any],
+            Sequence[Mapping[Any, Any]],
+            Literal["balanced", "balanced_subsample"],
+            None,
+        ] = None,
+        ccp_alpha: float = 0,
+        max_samples: Union[float, int, None] = None,
+    ) -> Prediction[RandomForestClassifier]:
+        return self.fit(
+            RandomForestClassifier(
+                criterion=criterion,
+                max_depth=max_depth,
+                min_samples_split=min_samples_split,
+                min_samples_leaf=min_samples_leaf,
+                min_weight_fraction_leaf=min_weight_fraction_leaf,
+                max_features=max_features,
+                max_leaf_nodes=max_leaf_nodes,
+                min_impurity_decrease=min_impurity_decrease,
+                bootstrap=bootstrap,
+                oob_score=oob_score,
+                n_jobs=n_jobs,
+                random_state=random_state,
+                verbose=verbose,
+                warm_start=warm_start,
+                class_weight=class_weight,
+                ccp_alpha=ccp_alpha,
+                max_samples=max_samples,
+            ),
+            *explanatory_grids,
+        )
+
+    def fit_random_forest_regression(
+        self,
+        *explanatory_grids: "Grid",
+        criterion: Literal[
+            "squared_error", "absolute_error", "friedman_mse", "poisson"
+        ] = "squared_error",
+        max_depth: Optional[int] = None,
+        min_samples_split: Union[float, int] = 2,
+        min_samples_leaf: Union[float, int] = 1,
+        min_weight_fraction_leaf: float = 0,
+        max_features: Union[float, int, Literal["sqrt", "log2"]] = 1,
+        max_leaf_nodes: Optional[int] = None,
+        min_impurity_decrease: float = 0,
+        bootstrap: bool = True,
+        oob_score: bool = False,
+        n_jobs: Optional[int] = None,
+        random_state: Union[int, Any, None] = None,
+        verbose: int = 0,
+        warm_start: bool = False,
+        ccp_alpha: float = 0,
+        max_samples: Union[float, int, None] = None,
+    ) -> Prediction[RandomForestRegressor]:
+        return self.fit(
+            RandomForestRegressor(
+                criterion=criterion,
+                max_depth=max_depth,
+                min_samples_split=min_samples_split,
+                min_samples_leaf=min_samples_leaf,
+                min_weight_fraction_leaf=min_weight_fraction_leaf,
+                max_features=max_features,
+                max_leaf_nodes=max_leaf_nodes,
+                min_impurity_decrease=min_impurity_decrease,
+                bootstrap=bootstrap,
+                oob_score=oob_score,
+                n_jobs=n_jobs,
+                random_state=random_state,
+                verbose=verbose,
+                warm_start=warm_start,
+                ccp_alpha=ccp_alpha,
+                max_samples=max_samples,
+            ),
+            *explanatory_grids,
+        )
+
     def plot(self, cmap: ColorMap):
         return dataclasses.replace(self, _cmap=cmap)
 
@@ -801,7 +1000,7 @@ def _pad(data: ndarray, buffer: int):
 
 
 def _focal(func: Callable, buffer: int, circle: bool, *grids: Grid) -> Tuple[Grid, ...]:
-    grids_adjusted = _standardize(True, *grids)
+    grids_adjusted = standardize(True, *grids)
     size = 2 * buffer + 1
     mask = _mask(buffer) if circle else np.full((size, size), True)
 
@@ -828,7 +1027,7 @@ def _batch(
     func: Callable[[Tuple[Grid, ...]], Tuple[Grid, ...]], buffer: int, *grids: Grid
 ) -> Tuple[Grid, ...]:
     stride = 8000 // buffer // len(grids)
-    grids1 = _standardize(True, *grids)
+    grids1 = standardize(True, *grids)
     grid = grids1[0]
 
     def tile():
@@ -899,7 +1098,7 @@ def con(grid: Grid, trueValue: Operand, falseValue: Operand):
 
 
 def _aggregate(func: Callable, *grids: Grid) -> Grid:
-    grids_adjusted = _standardize(True, *grids)
+    grids_adjusted = standardize(True, *grids)
     data = func(np.array([grid.data for grid in grids_adjusted]), axis=0)
     return grids_adjusted[0]._create(data)
 
@@ -921,14 +1120,29 @@ def maximum(*grids: Grid) -> Grid:
 
 
 def mosaic(*grids: Grid) -> Grid:
-    grids_adjusted = _standardize(False, *grids)
+    grids_adjusted = standardize(False, *grids)
     result = grids_adjusted[0]
     for grid in grids_adjusted[1:]:
         result = con(result.is_nan(), grid, result)
     return result
 
 
-def _standardize(intersect: bool, *grids: Grid) -> List[Grid]:
+def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
+    grids_adjusted = [con(g.is_nan(), g.mean, g) for g in standardize(True, *grids)]
+    arrays = (
+        PCA(n_components=n_components)
+        .fit_transform(
+            np.array(
+                [g.scale(StandardScaler()).data.ravel() for g in grids_adjusted]
+            ).transpose((1, 0))
+        )
+        .transpose((1, 0))
+    )
+    grid = grids_adjusted[0]
+    return tuple(grid._create(a.reshape((grid.height, grid.width))) for a in arrays)
+
+
+def standardize(intersect: bool, *grids: Grid) -> List[Grid]:
     if len(grids) == 1:
         return list(grids)
 

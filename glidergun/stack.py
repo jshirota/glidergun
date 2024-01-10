@@ -21,7 +21,7 @@ from glidergun.core import (
     _metadata,
     _nodata,
     _read,
-    _standardize,
+    standardize,
     con,
 )
 from glidergun.literals import DataType
@@ -240,7 +240,7 @@ class Stack:
     def zip_with(self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid]):
         grids = []
         for grid1, grid2 in zip(self.grids, other_stack.grids):
-            grid1, grid2 = _standardize(True, grid1, grid2)
+            grid1, grid2 = standardize(True, grid1, grid2)
             grids.append(func(grid1, grid2))
         return stack(*grids)
 
@@ -327,4 +327,4 @@ def stack(*grids) -> Stack:
                     band = _read(dataset, index)
                     bands.append(band)
 
-    return Stack(tuple(_standardize(True, *bands)))
+    return Stack(tuple(standardize(True, *bands)))
