@@ -5,6 +5,7 @@ import sys
 import warnings
 import numpy as np
 import rasterio
+import scipy as sp
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -14,6 +15,7 @@ from typing import (
     List,
     Literal,
     Mapping,
+    NamedTuple,
     Optional,
     Protocol,
     Sequence,
@@ -59,18 +61,18 @@ Operand = Union["Grid", float, int]
 Value = Union[float, int]
 
 
-class Predictor(Protocol):
+class Estimator(Protocol):
     fit: Callable
     score: Callable
     predict: Callable
 
 
-TPredictor = TypeVar("TPredictor", bound=Predictor)
+T = TypeVar("T", bound=Estimator)
 
 
-class Prediction(Generic[TPredictor]):
-    def __init__(self, model: TPredictor) -> None:
-        self.model: TPredictor = model
+class GridEstimator(Generic[T]):
+    def __init__(self, model: T) -> None:
+        self.model: T = model
         self._dtype: DataType = "float32"
 
     def fit(self, dependent_grid: "Grid", *explanatory_grids: "Grid"):
@@ -106,13 +108,18 @@ class Prediction(Generic[TPredictor]):
     @classmethod
     def load(cls, file: str):
         with open(file, "rb") as f:
-            return Prediction(pickle.load(f))
+            return GridEstimator(pickle.load(f))
 
 
 class Scaler(Protocol):
     fit: Callable
     transform: Callable
     fit_transform: Callable
+
+
+class StatsResult(NamedTuple):
+    statistic: "Grid"
+    pvalue: "Grid"
 
 
 @dataclass(frozen=True)
@@ -154,7 +161,7 @@ class Grid:
 
     @property
     def has_nan(self) -> bool:
-        return self.is_nan().data.any()  # type: ignore
+        return self._get("_has_nan", lambda: self.is_nan().data.any())
 
     @property
     def xmin(self) -> float:
@@ -178,19 +185,19 @@ class Grid:
 
     @property
     def mean(self) -> float:
-        return np.nanmean(self.data)  # type: ignore
+        return self._get("_mean", lambda: np.nanmean(self.data))
 
     @property
     def std(self) -> float:
-        return np.nanstd(self.data)  # type: ignore
+        return self._get("_std", lambda: np.nanmean(self.data))
 
     @property
     def min(self) -> float:
-        return np.nanmin(self.data)
+        return self._get("_min", lambda: np.nanmin(self.data))
 
     @property
     def max(self) -> float:
-        return np.nanmax(self.data)
+        return self._get("_max", lambda: np.nanmax(self.data))
 
     @property
     def cell_size(self) -> float:
@@ -198,7 +205,12 @@ class Grid:
 
     @property
     def md5(self) -> str:
-        return hashlib.md5(self.data).hexdigest()  # type: ignore
+        return self._get("_md5", lambda: hashlib.md5(self.data).hexdigest())  # type: ignore
+
+    def _get(self, name: str, func: Callable):
+        if not hasattr(self, name):
+            object.__setattr__(self, name, func())
+        return self.__getattribute__(name)
 
     def __add__(self, n: Operand):
         return self._apply(self, n, np.add)
@@ -358,18 +370,44 @@ class Grid:
     def round(self, decimals: int = 0):
         return self.local(lambda a: np.round(a, decimals))
 
+    def gaussian_filter(self, sigma: float, **kwargs):
+        return self.local(lambda a: sp.ndimage.gaussian_filter(a, sigma, **kwargs))
+
+    def gaussian_filter1d(self, sigma: float, **kwargs):
+        return self.local(lambda a: sp.ndimage.gaussian_filter1d(a, sigma, **kwargs))
+
+    def gaussian_gradient_magnitude(self, sigma: float, **kwargs):
+        return self.local(
+            lambda a: sp.ndimage.gaussian_gradient_magnitude(a, sigma, **kwargs)
+        )
+
+    def gaussian_laplace(self, sigma: float, **kwargs):
+        return self.local(lambda a: sp.ndimage.gaussian_laplace(a, sigma, **kwargs))
+
+    def prewitt(self, **kwargs):
+        return self.local(lambda a: sp.ndimage.prewitt(a, **kwargs))
+
+    def sobel(self, **kwargs):
+        return self.local(lambda a: sp.ndimage.sobel(a, **kwargs))
+
+    def uniform_filter(self, **kwargs):
+        return self.local(lambda a: sp.ndimage.uniform_filter(a, **kwargs))
+
+    def uniform_filter1d(self, size: float, **kwargs):
+        return self.local(lambda a: sp.ndimage.uniform_filter1d(a, size, **kwargs))
+
     def focal(
         self, func: Callable[[ndarray], Any], buffer: int, circle: bool
     ) -> "Grid":
         return _batch(lambda g: _focal(func, buffer, circle, *g), buffer, self)[0]
 
-    def focal_ptp(self, buffer=1, circle: bool = False, **kwargs):
+    def focal_ptp(self, buffer: int = 1, circle: bool = False, **kwargs):
         return self.focal(lambda a: np.ptp(a, axis=2, **kwargs), buffer, circle)
 
     def focal_percentile(
         self,
         percentile: float,
-        buffer=1,
+        buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
         **kwargs,
@@ -380,7 +418,7 @@ class Grid:
     def focal_quantile(
         self,
         probability: float,
-        buffer=1,
+        buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
         **kwargs,
@@ -390,7 +428,7 @@ class Grid:
 
     def focal_median(
         self,
-        buffer=1,
+        buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
         **kwargs,
@@ -398,20 +436,9 @@ class Grid:
         f = np.nanmedian if ignore_nan else np.median
         return self.focal(lambda a: f(a, axis=2, **kwargs), buffer, circle)
 
-    def focal_mode(
-        self,
-        buffer=1,
-        circle: bool = False,
-        ignore_nan: bool = True,
-        **kwargs,
-    ):
-        import glidergun.scipy
-
-        return glidergun.scipy.focal_mode(self, buffer, circle, ignore_nan, **kwargs)
-
     def focal_mean(
         self,
-        buffer=1,
+        buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
         **kwargs,
@@ -421,7 +448,7 @@ class Grid:
 
     def focal_std(
         self,
-        buffer=1,
+        buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
         **kwargs,
@@ -431,7 +458,7 @@ class Grid:
 
     def focal_var(
         self,
-        buffer=1,
+        buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
         **kwargs,
@@ -441,7 +468,7 @@ class Grid:
 
     def focal_min(
         self,
-        buffer=1,
+        buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
         **kwargs,
@@ -451,7 +478,7 @@ class Grid:
 
     def focal_max(
         self,
-        buffer=1,
+        buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
         **kwargs,
@@ -461,13 +488,201 @@ class Grid:
 
     def focal_sum(
         self,
-        buffer=1,
+        buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
         **kwargs,
     ):
         f = np.nansum if ignore_nan else np.sum
         return self.focal(lambda a: f(a, axis=2, **kwargs), buffer, circle)
+
+    def _kwargs(self, ignore_nan: bool, **kwargs):
+        return {
+            "axis": 2,
+            "nan_policy": "omit" if ignore_nan else "propagate",
+            **kwargs,
+        }
+
+    def focal_entropy(self, buffer: int = 1, circle: bool = False, **kwargs):
+        return self.focal(
+            lambda a: sp.stats.entropy(a, axis=2, **kwargs), buffer, circle
+        )
+
+    def focal_gmean(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.gmean(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_hmean(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.hmean(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_pmean(
+        self,
+        p: Value,
+        buffer: int = 1,
+        circle: bool = False,
+        ignore_nan: bool = True,
+        **kwargs,
+    ):
+        return self.focal(
+            lambda a: sp.stats.pmean(a, p, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_kurtosis(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.kurtosis(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_iqr(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.iqr(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_mode(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.mode(
+                a, **self._kwargs(ignore_nan, keepdims=True, **kwargs)
+            ),
+            buffer,
+            circle,
+        )
+
+    def focal_moment(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.moment(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_skew(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.skew(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_kstat(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.kstat(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_kstatvar(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.kstatvar(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_tmean(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.tmean(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_tvar(self, buffer: int = 1, circle: bool = False, **kwargs):
+        return self.focal(lambda a: sp.stats.tvar(a, axis=2, **kwargs), buffer, circle)
+
+    def focal_tmin(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.tmin(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_tmax(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.tmax(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_tstd(self, buffer: int = 1, circle: bool = False, **kwargs):
+        return self.focal(lambda a: sp.stats.tstd(a, axis=2, **kwargs), buffer, circle)
+
+    def focal_variation(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.variation(a, **self._kwargs(ignore_nan, **kwargs)),
+            buffer,
+            circle,
+        )
+
+    def focal_median_abs_deviation(
+        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
+    ):
+        return self.focal(
+            lambda a: sp.stats.median_abs_deviation(
+                a, **self._kwargs(ignore_nan, **kwargs)
+            ),
+            buffer,
+            circle,
+        )
+
+    def focal_chisquare(
+        self, buffer: int = 1, circle: bool = False, **kwargs
+    ) -> StatsResult:
+        def f(grids):
+            return _focal(
+                lambda a: sp.stats.chisquare(a, axis=2, **kwargs),
+                buffer,
+                circle,
+                *grids,
+            )
+
+        return StatsResult(*_batch(f, buffer, self))
+
+    def focal_ttest_ind(
+        self, other_grid: "Grid", buffer: int = 1, circle: bool = False, **kwargs
+    ) -> StatsResult:
+        def f(grids):
+            return _focal(
+                lambda a: sp.stats.ttest_ind(*a, axis=2, **kwargs),
+                buffer,
+                circle,
+                *grids,
+            )
+
+        return StatsResult(*_batch(f, buffer, self, other_grid))
 
     def zonal(self, func: Callable[[ndarray], Any], zone_grid: "Grid"):
         zone_grid = zone_grid.type("int32")
@@ -507,6 +722,62 @@ class Grid:
 
     def zonal_sum(self, zone_grid: "Grid", **kwargs):
         return self.zonal(lambda a: np.sum(a, **kwargs), zone_grid)
+
+    def zonal_entropy(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.entropy(a, **kwargs), zone_grid)
+
+    def zonal_gmean(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.gmean(a, **kwargs), zone_grid)
+
+    def zonal_hmean(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.hmean(a, **kwargs), zone_grid)
+
+    def zonal_pmean(self, p: Value, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.pmean(a, p, **kwargs), zone_grid)
+
+    def zonal_kurtosis(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.kurtosis(a, **kwargs), zone_grid)
+
+    def zonal_iqr(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.iqr(a, **kwargs), zone_grid)
+
+    def zonal_mode(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.mode(a, **kwargs), zone_grid)
+
+    def zonal_moment(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.moment(a, **kwargs), zone_grid)
+
+    def zonal_skew(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.skew(a, **kwargs), zone_grid)
+
+    def zonal_kstat(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.kstat(a, **kwargs), zone_grid)
+
+    def zonal_kstatvar(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.kstatvar(a, **kwargs), zone_grid)
+
+    def zonal_tmean(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.tmean(a, **kwargs), zone_grid)
+
+    def zonal_tvar(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.tvar(a, **kwargs), zone_grid)
+
+    def zonal_tmin(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.tmin(a, **kwargs), zone_grid)
+
+    def zonal_tmax(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.tmax(a, **kwargs), zone_grid)
+
+    def zonal_tstd(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.tstd(a, **kwargs), zone_grid)
+
+    def zonal_variation(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: sp.stats.variation(a, **kwargs), zone_grid)
+
+    def zonal_median_abs_deviation(self, zone_grid: "Grid", **kwargs):
+        return self.zonal(
+            lambda a: sp.stats.median_abs_deviation(a, **kwargs), zone_grid
+        )
 
     def _reproject(
         self, transform, crs, width, height, resampling: Resampling
@@ -676,10 +947,8 @@ class Grid:
             scaler = QuantileTransformer(n_quantiles=10)
         return self.local(lambda a: scaler.fit_transform(a, **fit_params))
 
-    def fit(
-        self, model: TPredictor, *explanatory_grids: "Grid"
-    ) -> Prediction[TPredictor]:
-        return Prediction(model).fit(self, *explanatory_grids)
+    def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
+        return GridEstimator(model).fit(self, *explanatory_grids)
 
     def fit_linear_regression(
         self,
@@ -688,7 +957,7 @@ class Grid:
         copy_X: bool = True,
         n_jobs: Optional[int] = None,
         positive: bool = False,
-    ) -> Prediction[LinearRegression]:
+    ) -> GridEstimator[LinearRegression]:
         return self.fit(
             LinearRegression(
                 fit_intercept=fit_intercept,
@@ -716,7 +985,7 @@ class Grid:
             Mapping[Any, Any], str, Sequence[Mapping[Any, Any]], None
         ] = None,
         ccp_alpha: float = 0,
-    ) -> Prediction[DecisionTreeClassifier]:
+    ) -> GridEstimator[DecisionTreeClassifier]:
         return self.fit(
             DecisionTreeClassifier(
                 criterion=criterion,
@@ -751,7 +1020,7 @@ class Grid:
         max_leaf_nodes: Optional[int] = None,
         min_impurity_decrease: float = 0,
         ccp_alpha: float = 0,
-    ) -> Prediction[DecisionTreeRegressor]:
+    ) -> GridEstimator[DecisionTreeRegressor]:
         return self.fit(
             DecisionTreeRegressor(
                 criterion=criterion,
@@ -794,7 +1063,7 @@ class Grid:
         ] = None,
         ccp_alpha: float = 0,
         max_samples: Union[float, int, None] = None,
-    ) -> Prediction[RandomForestClassifier]:
+    ) -> GridEstimator[RandomForestClassifier]:
         return self.fit(
             RandomForestClassifier(
                 criterion=criterion,
@@ -839,7 +1108,7 @@ class Grid:
         warm_start: bool = False,
         ccp_alpha: float = 0,
         max_samples: Union[float, int, None] = None,
-    ) -> Prediction[RandomForestRegressor]:
+    ) -> GridEstimator[RandomForestRegressor]:
         return self.fit(
             RandomForestRegressor(
                 criterion=criterion,

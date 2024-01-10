@@ -1,9 +1,8 @@
 import glidergun.ipython
-import glidergun.scipy as scipy
 from glidergun.core import (
     Grid,
     Extent,
-    Prediction,
+    GridEstimator,
     Resampling,
     grid,
     con,
