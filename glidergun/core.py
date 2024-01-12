@@ -4,6 +4,7 @@ import pickle
 import sys
 import warnings
 import numpy as np
+import matplotlib.pyplot as plt
 import rasterio
 import scipy as sp
 from dataclasses import dataclass
@@ -941,6 +942,16 @@ class Grid:
             default_value=np.nan,  # type: ignore
         )
         return self._create(array)
+
+    def to_stack(self, cmap: ColorMap):
+        from glidergun.stack import stack
+
+        grid1 = self - self.min
+        grid2 = grid1 / grid1.max
+        arrays = plt.get_cmap(cmap)(grid2.data).transpose(2, 0, 1)[:3]  # type: ignore
+        mask = self.is_nan()
+        r, g, b = [self._create(a * 253 + 1).set_nan(mask) for a in arrays]
+        return stack(r, g, b)
 
     def scale(self, scaler: Optional[Scaler] = None, **fit_params):
         if not scaler:

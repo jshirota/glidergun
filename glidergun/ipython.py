@@ -1,4 +1,5 @@
 import IPython
+import matplotlib.pyplot as plt
 import numpy as np
 from base64 import b64encode
 from io import BytesIO
@@ -8,10 +9,8 @@ from glidergun.stack import Stack
 
 
 def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
-    from matplotlib import pyplot
-
     with BytesIO() as buffer:
-        figure = pyplot.figure(figsize=figsize, frameon=False)
+        figure = plt.figure(figsize=figsize, frameon=False)
         axes = figure.add_axes((0, 0, 1, 1))
         axes.axis("off")
 
@@ -21,21 +20,15 @@ def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
             obj = obj.resample(obj.cell_size / n)
 
         if isinstance(obj, Grid):
-            pyplot.imshow(obj.data, cmap=color)
+            plt.imshow(obj.data, cmap=color)
 
         elif isinstance(obj, Stack):
-
-            def stretch(g):
-                bins = list(np.histogram(g.data[np.isfinite(g.data)], 256)[1])
-                mappings = [(*n, i) for i, n in enumerate(zip(bins, bins[1:]))]
-                return g.reclass(*mappings)
-
-            rgb = [stretch(obj.grids[i - 1]).data for i in color]
+            rgb = [obj.grids[i - 1].data for i in color]
             alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
-            pyplot.imshow(np.dstack([*[np.asanyarray(g, "uint8") for g in rgb], alpha]))
+            plt.imshow(np.dstack([*[np.asanyarray(g, "uint8") for g in rgb], alpha]))
 
-        pyplot.savefig(buffer, bbox_inches="tight", pad_inches=0)
-        pyplot.close(figure)
+        plt.savefig(buffer, bbox_inches="tight", pad_inches=0)
+        plt.close(figure)
         image = b64encode(buffer.getvalue()).decode()
         return f"data:image/png;base64, {image}"
 
