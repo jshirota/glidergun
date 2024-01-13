@@ -1,9 +1,11 @@
-import IPython
-import matplotlib.pyplot as plt
-import numpy as np
 from base64 import b64encode
 from io import BytesIO
 from typing import Optional, Union
+
+import IPython
+import matplotlib.pyplot as plt
+import numpy as np
+
 from glidergun.core import Grid
 from glidergun.stack import Stack
 

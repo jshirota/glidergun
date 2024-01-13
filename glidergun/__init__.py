@@ -1,17 +1,18 @@
+# flake8: noqa
 import glidergun.ipython
 from glidergun.core import (
-    Grid,
     Extent,
+    Grid,
     GridEstimator,
     Resampling,
-    grid,
+    adjust,
     con,
-    mean,
-    std,
-    minimum,
+    grid,
     maximum,
+    mean,
+    minimum,
     mosaic,
     pca,
-    standardize,
+    std,
 )
 from glidergun.stack import Stack, stack

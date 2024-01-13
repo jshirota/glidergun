@@ -3,10 +3,6 @@ import hashlib
 import pickle
 import sys
 import warnings
-import numpy as np
-import matplotlib.pyplot as plt
-import rasterio
-import scipy as sp
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -25,6 +21,11 @@ from typing import (
     Union,
     overload,
 )
+
+import matplotlib.pyplot as plt
+import numpy as np
+import rasterio
+import scipy as sp
 from numpy import arctan, arctan2, cos, gradient, ndarray, pi, sin, sqrt
 from numpy.lib.stride_tricks import sliding_window_view
 from rasterio import features
@@ -32,13 +33,14 @@ from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine
-from rasterio.warp import calculate_default_transform, reproject, Resampling
+from rasterio.warp import Resampling, calculate_default_transform, reproject
 from shapely import Point, Polygon
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+
 from glidergun.literals import ColorMap, DataType
 
 
@@ -100,7 +102,7 @@ class GridEstimator(Generic[T]):
         return grid._create(array.reshape((grid.height, grid.width))).type(self._dtype)
 
     def _flatten(self, *grids: "Grid"):
-        return [con(g.is_nan(), g.mean, g) for g in standardize(True, *grids)]
+        return [con(g.is_nan(), g.mean, g) for g in adjust(*grids)]
 
     def save(self, file: str):
         with open(file, "wb") as f:
@@ -332,7 +334,7 @@ class Grid:
         if left.cell_size == right.cell_size and left.extent == right.extent:
             return self._create(op(left.data, right.data))
 
-        l_adjusted, r_adjusted = standardize(True, left, right)
+        l_adjusted, r_adjusted = adjust(left, right)
 
         return self._create(op(l_adjusted.data, r_adjusted.data))
 
@@ -1280,7 +1282,7 @@ def _pad(data: ndarray, buffer: int):
 
 
 def _focal(func: Callable, buffer: int, circle: bool, *grids: Grid) -> Tuple[Grid, ...]:
-    grids_adjusted = standardize(True, *grids)
+    grids_adjusted = adjust(*grids)
     size = 2 * buffer + 1
     mask = _mask(buffer) if circle else np.full((size, size), True)
 
@@ -1307,7 +1309,7 @@ def _batch(
     func: Callable[[Tuple[Grid, ...]], Tuple[Grid, ...]], buffer: int, *grids: Grid
 ) -> Tuple[Grid, ...]:
     stride = 8000 // buffer // len(grids)
-    grids1 = standardize(True, *grids)
+    grids1 = adjust(*grids)
     grid = grids1[0]
 
     def tile():
@@ -1378,7 +1380,7 @@ def con(grid: Grid, trueValue: Operand, falseValue: Operand):
 
 
 def _aggregate(func: Callable, *grids: Grid) -> Grid:
-    grids_adjusted = standardize(True, *grids)
+    grids_adjusted = adjust(*grids)
     data = func(np.array([grid.data for grid in grids_adjusted]), axis=0)
     return grids_adjusted[0]._create(data)
 
@@ -1400,7 +1402,7 @@ def maximum(*grids: Grid) -> Grid:
 
 
 def mosaic(*grids: Grid) -> Grid:
-    grids_adjusted = standardize(False, *grids)
+    grids_adjusted = adjust(*grids, intersect=False)
     result = grids_adjusted[0]
     for grid in grids_adjusted[1:]:
         result = con(result.is_nan(), grid, result)
@@ -1408,7 +1410,7 @@ def mosaic(*grids: Grid) -> Grid:
 
 
 def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
-    grids_adjusted = [con(g.is_nan(), g.mean, g) for g in standardize(True, *grids)]
+    grids_adjusted = [con(g.is_nan(), g.mean, g) for g in adjust(*grids)]
     arrays = (
         PCA(n_components=n_components)
         .fit_transform(
@@ -1422,7 +1424,7 @@ def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
     return tuple(grid._create(a.reshape((grid.height, grid.width))) for a in arrays)
 
 
-def standardize(intersect: bool, *grids: Grid) -> List[Grid]:
+def adjust(*grids: Grid, intersect: bool = True) -> List[Grid]:
     if len(grids) == 1:
         return list(grids)
 

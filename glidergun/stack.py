@@ -1,28 +1,23 @@
 import dataclasses
 import warnings
-import rasterio
 from dataclasses import dataclass
-from typing import (
-    Callable,
-    List,
-    Optional,
-    Tuple,
-    Union,
-    overload,
-)
+from typing import Callable, List, Optional, Tuple, Union, overload
+
+import rasterio
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
+
 from glidergun.core import (
-    Grid,
     Extent,
+    Grid,
     Scaler,
     _metadata,
     _nodata,
     _read,
-    standardize,
     con,
+    adjust,
 )
 from glidergun.literals import DataType
 
@@ -240,7 +235,7 @@ class Stack:
     def zip_with(self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid]):
         grids = []
         for grid1, grid2 in zip(self.grids, other_stack.grids):
-            grid1, grid2 = standardize(True, grid1, grid2)
+            grid1, grid2 = adjust(grid1, grid2)
             grids.append(func(grid1, grid2))
         return stack(*grids)
 
@@ -327,4 +322,4 @@ def stack(*grids) -> Stack:
                     band = _read(dataset, index)
                     bands.append(band)
 
-    return Stack(tuple(standardize(True, *bands)))
+    return Stack(tuple(adjust(*bands)))
