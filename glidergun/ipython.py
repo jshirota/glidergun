@@ -25,7 +25,7 @@ def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
             plt.imshow(obj.data, cmap=color)
 
         elif isinstance(obj, Stack):
-            rgb = [obj.grids[i - 1].data for i in color]
+            rgb = [obj.grids[i - 1].data for i in (color if color else (1, 2, 3))]
             alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
             plt.imshow(np.dstack([*[np.asanyarray(g, "uint8") for g in rgb], alpha]))
 

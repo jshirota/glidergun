@@ -131,7 +131,7 @@ class Grid:
     data: ndarray
     crs: CRS
     transform: Affine
-    _cmap: ColorMap = "gray"
+    _cmap: Union[ColorMap, Any] = "gray"
 
     def __post_init__(self):
         self.data.flags.writeable = False
@@ -946,7 +946,7 @@ class Grid:
         )
         return self._create(array)
 
-    def to_stack(self, cmap: ColorMap):
+    def to_stack(self, cmap: Union[ColorMap, Any]):
         from glidergun.stack import stack
 
         grid1 = self - self.min
@@ -1055,7 +1055,7 @@ class Grid:
     def fit_mlp_classification(
         self,
         *explanatory_grids: "Grid",
-        hidden_layer_sizes: Tuple[int] = (100,),
+        hidden_layer_sizes: Tuple[int, ...] = (100,),
         activation: Literal["relu", "identity", "logistic", "tanh"] = "relu",
         solver: Literal["lbfgs", "sgd", "adam"] = "adam",
         alpha: float = 0.0001,
@@ -1081,7 +1081,7 @@ class Grid:
     ) -> GridEstimator[MLPClassifier]:
         return self.fit(
             MLPClassifier(
-                hidden_layer_sizes=hidden_layer_sizes,
+                hidden_layer_sizes=hidden_layer_sizes,  # type: ignore
                 activation=activation,
                 solver=solver,
                 alpha=alpha,
@@ -1111,7 +1111,7 @@ class Grid:
     def fit_mlp_regression(
         self,
         *explanatory_grids: "Grid",
-        hidden_layer_sizes: Tuple[int] = (100,),
+        hidden_layer_sizes: Tuple[int, ...] = (100,),
         activation: Literal["relu", "identity", "logistic", "tanh"] = "relu",
         solver: Literal["lbfgs", "sgd", "adam"] = "adam",
         alpha: float = 0.0001,
@@ -1137,7 +1137,7 @@ class Grid:
     ) -> GridEstimator[MLPRegressor]:
         return self.fit(
             MLPRegressor(
-                hidden_layer_sizes=hidden_layer_sizes,
+                hidden_layer_sizes=hidden_layer_sizes,  # type: ignore
                 activation=activation,
                 solver=solver,
                 alpha=alpha,
@@ -1257,12 +1257,12 @@ class Grid:
             *explanatory_grids,
         )
 
-    def plot(self, cmap: ColorMap):
+    def plot(self, cmap: Union[ColorMap, Any]):
         return dataclasses.replace(self, _cmap=cmap)
 
     def map(
         self,
-        cmap: ColorMap = "gray",
+        cmap: Union[ColorMap, Any] = "gray",
         opacity: float = 1.0,
         folium_map=None,
         width: int = 800,
