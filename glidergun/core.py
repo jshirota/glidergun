@@ -568,7 +568,7 @@ class Grid:
         return self.focal(
             lambda a: sp.stats.mode(
                 a, **self._kwargs(ignore_nan, keepdims=True, **kwargs)
-            ),
+            )[0].transpose(2, 0, 1)[0],
             buffer,
             circle,
         )
