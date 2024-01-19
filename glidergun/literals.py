@@ -95,3 +95,15 @@ DataType = Literal[
     "uint16",
     "uint32",
 ]
+
+CellSizeResolution = Literal[
+    "first",
+    "smallest",
+    "largest",
+]
+
+ExtentResolution = Literal[
+    "first",
+    "intersect",
+    "union",
+]

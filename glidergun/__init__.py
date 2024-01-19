@@ -5,7 +5,6 @@ from glidergun.core import (
     Grid,
     GridEstimator,
     Resampling,
-    adjust,
     con,
     grid,
     maximum,
@@ -13,6 +12,7 @@ from glidergun.core import (
     minimum,
     mosaic,
     pca,
+    standardize,
     std,
 )
 from glidergun.stack import Stack, stack

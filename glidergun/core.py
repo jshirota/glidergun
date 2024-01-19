@@ -42,7 +42,7 @@ from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
-from glidergun.literals import ColorMap, DataType
+from glidergun.literals import CellSizeResolution, ColorMap, DataType, ExtentResolution
 
 
 class Extent(Tuple[float, float, float, float]):
@@ -103,7 +103,7 @@ class GridEstimator(Generic[T]):
         return grid._create(array.reshape((grid.height, grid.width))).type(self._dtype)
 
     def _flatten(self, *grids: "Grid"):
-        return [con(g.is_nan(), g.mean, g) for g in adjust(*grids)]
+        return [con(g.is_nan(), g.mean, g) for g in standardize(*grids)]
 
     def save(self, file: str):
         with open(file, "wb") as f:
@@ -335,7 +335,7 @@ class Grid:
         if left.cell_size == right.cell_size and left.extent == right.extent:
             return self._create(op(left.data, right.data))
 
-        l_adjusted, r_adjusted = adjust(left, right)
+        l_adjusted, r_adjusted = standardize(left, right)
 
         return self._create(op(l_adjusted.data, r_adjusted.data))
 
@@ -1395,7 +1395,7 @@ def _pad(data: ndarray, buffer: int):
 
 
 def _focal(func: Callable, buffer: int, circle: bool, *grids: Grid) -> Tuple[Grid, ...]:
-    grids_adjusted = adjust(*grids)
+    grids_adjusted = standardize(*grids)
     size = 2 * buffer + 1
     mask = _mask(buffer) if circle else np.full((size, size), True)
 
@@ -1422,7 +1422,7 @@ def _batch(
     func: Callable[[Tuple[Grid, ...]], Tuple[Grid, ...]], buffer: int, *grids: Grid
 ) -> Tuple[Grid, ...]:
     stride = 8000 // buffer // len(grids)
-    grids1 = adjust(*grids)
+    grids1 = standardize(*grids)
     grid = grids1[0]
 
     def tile():
@@ -1493,7 +1493,7 @@ def con(grid: Grid, trueValue: Operand, falseValue: Operand):
 
 
 def _aggregate(func: Callable, *grids: Grid) -> Grid:
-    grids_adjusted = adjust(*grids)
+    grids_adjusted = standardize(*grids)
     data = func(np.array([grid.data for grid in grids_adjusted]), axis=0)
     return grids_adjusted[0]._create(data)
 
@@ -1515,7 +1515,7 @@ def maximum(*grids: Grid) -> Grid:
 
 
 def mosaic(*grids: Grid) -> Grid:
-    grids_adjusted = adjust(*grids, intersect=False)
+    grids_adjusted = standardize(*grids, extent_resolution="union")
     result = grids_adjusted[0]
     for grid in grids_adjusted[1:]:
         result = con(result.is_nan(), grid, result)
@@ -1523,7 +1523,7 @@ def mosaic(*grids: Grid) -> Grid:
 
 
 def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
-    grids_adjusted = [con(g.is_nan(), g.mean, g) for g in adjust(*grids)]
+    grids_adjusted = [con(g.is_nan(), g.mean, g) for g in standardize(*grids)]
     arrays = (
         PCA(n_components=n_components)
         .fit_transform(
@@ -1537,27 +1537,35 @@ def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
     return tuple(grid._create(a.reshape((grid.height, grid.width))) for a in arrays)
 
 
-def adjust(*grids: Grid, intersect: bool = True) -> List[Grid]:
+def standardize(
+    *grids: Grid,
+    extent_resolution: ExtentResolution = "intersect",
+    cell_size_resolution: CellSizeResolution = "largest",
+) -> Tuple[Grid, ...]:
     if len(grids) == 1:
-        return list(grids)
+        return tuple(grids)
 
     crs_set = set(grid.crs for grid in grids)
 
     if len(crs_set) > 1:
         raise ValueError("Input grids must have the same CRS.")
 
-    cell_size = 0
-    extent = None
+    cell_sizes = [g.cell_size for g in grids]
+
+    if cell_size_resolution == "smallest":
+        cell_size = min(cell_sizes)
+    elif cell_size_resolution == "largest":
+        cell_size = max(cell_sizes)
+    else:
+        cell_size = cell_sizes[0]
+
+    extent = grids[0].extent
 
     for grid in grids:
-        cell_size = grid.cell_size if grid.cell_size > cell_size else cell_size
-        extent = (
-            grid.extent
-            if extent is None
-            else extent & grid.extent
-            if intersect
-            else extent | grid.extent
-        )
+        if extent_resolution == "intersect":
+            extent = extent & grid.extent
+        elif extent_resolution == "union":
+            extent = extent | grid.extent
 
     results = []
 
@@ -1568,7 +1576,7 @@ def adjust(*grids: Grid, intersect: bool = True) -> List[Grid]:
             grid = grid.clip(extent)  # type: ignore
         results.append(grid)
 
-    return results
+    return tuple(results)
 
 
 def _nodata(dtype: str) -> Optional[Value]:
