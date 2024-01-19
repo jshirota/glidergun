@@ -834,6 +834,8 @@ class Grid:
         return self._resample(extent, self.cell_size, Resampling.nearest)
 
     def resample(self, cell_size: float, resampling: Resampling = Resampling.nearest):
+        if self.cell_size == cell_size:
+            return self
         return self._resample(self.extent, cell_size, resampling)
 
     def random(self):
@@ -1515,7 +1517,7 @@ def maximum(*grids: Grid) -> Grid:
 
 
 def mosaic(*grids: Grid) -> Grid:
-    grids_adjusted = standardize(*grids, extent_resolution="union")
+    grids_adjusted = standardize(*grids, extent="union")
     result = grids_adjusted[0]
     for grid in grids_adjusted[1:]:
         result = con(result.is_nan(), grid, result)
@@ -1539,8 +1541,8 @@ def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
 
 def standardize(
     *grids: Grid,
-    extent_resolution: ExtentResolution = "intersect",
-    cell_size_resolution: CellSizeResolution = "largest",
+    extent: Union[Extent, ExtentResolution] = "intersect",
+    cell_size: Union[float, CellSizeResolution] = "largest",
 ) -> Tuple[Grid, ...]:
     if len(grids) == 1:
         return tuple(grids)
@@ -1550,30 +1552,34 @@ def standardize(
     if len(crs_set) > 1:
         raise ValueError("Input grids must have the same CRS.")
 
-    cell_sizes = [g.cell_size for g in grids]
-
-    if cell_size_resolution == "smallest":
-        cell_size = min(cell_sizes)
-    elif cell_size_resolution == "largest":
-        cell_size = max(cell_sizes)
+    if isinstance(cell_size, float):
+        cell_size_standardized = cell_size
     else:
-        cell_size = cell_sizes[0]
+        cell_sizes = [g.cell_size for g in grids]
+        if cell_size == "smallest":
+            cell_size_standardized = min(cell_sizes)
+        elif cell_size == "largest":
+            cell_size_standardized = max(cell_sizes)
+        else:
+            cell_size_standardized = cell_sizes[0]
 
-    extent = grids[0].extent
-
-    for grid in grids:
-        if extent_resolution == "intersect":
-            extent = extent & grid.extent
-        elif extent_resolution == "union":
-            extent = extent | grid.extent
+    if isinstance(extent, Extent):
+        extent_standardized = extent
+    else:
+        extent_standardized = grids[0].extent
+        for grid in grids:
+            if extent == "intersect":
+                extent_standardized = extent_standardized & grid.extent
+            elif extent == "union":
+                extent_standardized = extent_standardized | grid.extent
 
     results = []
 
     for grid in grids:
-        if grid.cell_size != cell_size:
-            grid = grid.resample(cell_size)
-        if grid.extent != extent:
-            grid = grid.clip(extent)  # type: ignore
+        if grid.cell_size != cell_size_standardized:
+            grid = grid.resample(cell_size_standardized)
+        if grid.extent != extent_standardized:
+            grid = grid.clip(extent_standardized)  # type: ignore
         results.append(grid)
 
     return tuple(results)
