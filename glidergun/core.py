@@ -34,7 +34,8 @@ from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine
 from rasterio.warp import Resampling, calculate_default_transform, reproject
-from shapely import Point, Polygon
+from scipy.interpolate import RBFInterpolator
+from shapely import Polygon
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.linear_model import LinearRegression
@@ -42,12 +43,20 @@ from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
-from glidergun.literals import CellSizeResolution, ColorMap, DataType, ExtentResolution
+from glidergun.literals import (
+    CellSizeResolution,
+    ColorMap,
+    DataType,
+    ExtentResolution,
+    InterpolationKernel,
+)
 
 
-class Extent(Tuple[float, float, float, float]):
-    def __new__(cls, xmin: float, ymin: float, xmax: float, ymax: float):
-        return super(Extent, cls).__new__(cls, (xmin, ymin, xmax, ymax))
+class Extent(NamedTuple):
+    xmin: float
+    ymin: float
+    xmax: float
+    ymax: float
 
     def intersect(self, extent: "Extent"):
         return Extent(*[f(x) for f, x in zip((max, max, min, min), zip(self, extent))])
@@ -838,7 +847,7 @@ class Grid:
             return self
         return self._resample(self.extent, cell_size, resampling)
 
-    def random(self):
+    def randomize(self):
         return self._create(np.random.rand(self.height, self.width))
 
     def aspect(self):
@@ -901,7 +910,7 @@ class Grid:
 
     def data_extent(self):
         xmin, ymin, xmax, ymax = None, None, None, None
-        for (x, y), _ in self.to_points():
+        for x, y, _ in self.to_points():
             if not xmin or x < xmin:
                 xmin = x
             if not ymin or y < ymin:
@@ -918,15 +927,12 @@ class Grid:
     def shrink(self):
         return self.clip(self.data_extent())
 
-    def to_points(self) -> Iterable[Tuple[Point, Value]]:
+    def to_points(self) -> Iterable[Tuple[float, float, float]]:
         n = self.cell_size / 2
         for y, row in enumerate(self.data):
             for x, value in enumerate(row):
                 if np.isfinite(value):
-                    yield Point(
-                        self.xmin + x * self.cell_size + n,
-                        self.ymax - y * self.cell_size - n,
-                    ), value
+                    yield self.xmin + x * self.cell_size + n, self.ymax - y * self.cell_size - n, value
 
     def to_polygons(self) -> Iterable[Tuple[Polygon, Value]]:
         for shape, value in features.shapes(
@@ -1583,6 +1589,54 @@ def standardize(
         results.append(grid)
 
     return tuple(results)
+
+
+def create(
+    extent: Tuple[float, float, float, float], epsg: Union[int, CRS], cell_size: float
+):
+    xmin, ymin, xmax, ymax = extent
+    width = int((xmax - xmin) / cell_size)
+    height = int((ymax - ymin) / cell_size)
+    xmin = xmax - cell_size * width
+    ymax = ymin + cell_size * height
+    crs = CRS.from_epsg(epsg) if isinstance(epsg, int) else epsg
+    transform = Affine(cell_size, 0, xmin, 0, -cell_size, ymax, 0, 0, 1)
+    return Grid(np.zeros((height, width), "uint8"), crs, transform)
+
+
+def interpolate(
+    points: List[Tuple[float, float, float]],
+    epsg: Union[int, CRS],
+    cell_size: Optional[float] = None,
+    neighbors: Optional[int] = None,
+    smoothing: float = 0,
+    kernel: InterpolationKernel = "thin_plate_spline",
+    epsilon: float = 1,
+    degree: Optional[int] = None,
+):
+    coords = np.array([p[:2] for p in points])
+    values = np.array([p[-1] for p in points])
+    x, y = coords.transpose(1, 0)
+    xmin, ymin, xmax, ymax = x.min(), y.min(), x.max(), y.max()
+    buffer = max(xmax - xmin, ymax - ymin) / 10
+
+    extent = Extent(xmin - buffer, ymin - buffer, xmax + buffer, ymax + buffer)
+    dx = extent.xmax - extent.xmin
+    dy = extent.ymax - extent.ymin
+
+    grid = create(extent, epsg, max(dx, dy) / 1000 if cell_size is None else cell_size)
+
+    interp = RBFInterpolator(
+        coords, values, neighbors, smoothing, kernel, epsilon, degree
+    )
+
+    xs = np.linspace(xmin, xmax, grid.width)
+    ys = np.linspace(ymin, ymax, grid.height)
+    array = np.array([[x0, y0] for x0 in xs for y0 in ys])
+
+    data = interp(array).reshape((grid.width, grid.height)).transpose(1, 0)
+
+    return grid.local(lambda _: data)
 
 
 def _nodata(dtype: str) -> Optional[Value]:

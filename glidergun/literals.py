@@ -107,3 +107,14 @@ ExtentResolution = Literal[
     "intersect",
     "union",
 ]
+
+InterpolationKernel = Literal[
+    "linear",
+    "thin_plate_spline",
+    "cubic",
+    "quintic",
+    "multiquadric",
+    "inverse_multiquadric",
+    "inverse_quadratic",
+    "gaussian",
+]
