@@ -34,7 +34,11 @@ from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine
 from rasterio.warp import Resampling, calculate_default_transform, reproject
-from scipy.interpolate import RBFInterpolator
+from scipy.interpolate import (
+    LinearNDInterpolator,
+    NearestNDInterpolator,
+    RBFInterpolator,
+)
 from shapely import Polygon
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
@@ -1605,14 +1609,10 @@ def create(
 
 
 def interpolate(
+    interpolator_factory: Callable[[ndarray, ndarray], Any],
     points: List[Tuple[float, float, float]],
     epsg: Union[int, CRS],
     cell_size: Optional[float] = None,
-    neighbors: Optional[int] = None,
-    smoothing: float = 0,
-    kernel: InterpolationKernel = "thin_plate_spline",
-    epsilon: float = 1,
-    degree: Optional[int] = None,
 ):
     coords = np.array([p[:2] for p in points])
     values = np.array([p[-1] for p in points])
@@ -1626,9 +1626,7 @@ def interpolate(
 
     grid = create(extent, epsg, max(dx, dy) / 1000 if cell_size is None else cell_size)
 
-    interp = RBFInterpolator(
-        coords, values, neighbors, smoothing, kernel, epsilon, degree
-    )
+    interp = interpolator_factory(coords, values)
 
     xs = np.linspace(xmin, xmax, grid.width)
     ys = np.linspace(ymin, ymax, grid.height)
@@ -1637,6 +1635,50 @@ def interpolate(
     data = interp(array).reshape((grid.width, grid.height)).transpose(1, 0)
 
     return grid.local(lambda _: data)
+
+
+def interpolate_linear(
+    points: List[Tuple[float, float, float]],
+    epsg: Union[int, CRS],
+    cell_size: Optional[float] = None,
+    fill_value: float = np.nan,
+    rescale: bool = False,
+):
+    def f(coords, values):
+        return LinearNDInterpolator(coords, values, fill_value, rescale)
+
+    return interpolate(f, points, epsg, cell_size)
+
+
+def interpolate_nearest(
+    points: List[Tuple[float, float, float]],
+    epsg: Union[int, CRS],
+    cell_size: Optional[float] = None,
+    rescale: bool = False,
+    tree_options: Any = None,
+):
+    def f(coords, values):
+        return NearestNDInterpolator(coords, values, rescale, tree_options)
+
+    return interpolate(f, points, epsg, cell_size)
+
+
+def interpolate_rbf(
+    points: List[Tuple[float, float, float]],
+    epsg: Union[int, CRS],
+    cell_size: Optional[float] = None,
+    neighbors: Optional[int] = None,
+    smoothing: float = 0,
+    kernel: InterpolationKernel = "thin_plate_spline",
+    epsilon: float = 1,
+    degree: Optional[int] = None,
+):
+    def f(coords, values):
+        return RBFInterpolator(
+            coords, values, neighbors, smoothing, kernel, epsilon, degree
+        )
+
+    return interpolate(f, points, epsg, cell_size)
 
 
 def _nodata(dtype: str) -> Optional[Value]:
