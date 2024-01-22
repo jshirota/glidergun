@@ -78,6 +78,12 @@ Operand = Union["Grid", float, int]
 Value = Union[float, int]
 
 
+class Point(NamedTuple):
+    x: float
+    y: float
+    value: Value
+
+
 class Estimator(Protocol):
     fit: Callable
     score: Callable
@@ -931,12 +937,16 @@ class Grid:
     def shrink(self):
         return self.clip(self.data_extent())
 
-    def to_points(self) -> Iterable[Tuple[float, float, float]]:
+    def to_points(self) -> Iterable[Point]:
         n = self.cell_size / 2
         for y, row in enumerate(self.data):
             for x, value in enumerate(row):
                 if np.isfinite(value):
-                    yield self.xmin + x * self.cell_size + n, self.ymax - y * self.cell_size - n, value
+                    yield Point(
+                        self.xmin + x * self.cell_size + n,
+                        self.ymax - y * self.cell_size - n,
+                        value,
+                    )
 
     def to_polygons(self) -> Iterable[Tuple[Polygon, Value]]:
         for shape, value in features.shapes(
@@ -1610,12 +1620,19 @@ def create(
 
 def interpolate(
     interpolator_factory: Callable[[ndarray, ndarray], Any],
-    points: List[Tuple[float, float, float]],
+    points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
     cell_size: Optional[float] = None,
 ):
-    coords = np.array([p[:2] for p in points])
-    values = np.array([p[-1] for p in points])
+    coord_array = []
+    value_array = []
+
+    for p in points:
+        coord_array.append(p[:2])
+        value_array.append(p[-1])
+
+    coords = np.array(coord_array)
+    values = np.array(value_array)
     x, y = coords.transpose(1, 0)
     xmin, ymin, xmax, ymax = x.min(), y.min(), x.max(), y.max()
     buffer = max(xmax - xmin, ymax - ymin) / 10
@@ -1638,7 +1655,7 @@ def interpolate(
 
 
 def interpolate_linear(
-    points: List[Tuple[float, float, float]],
+    points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
     cell_size: Optional[float] = None,
     fill_value: float = np.nan,
@@ -1651,7 +1668,7 @@ def interpolate_linear(
 
 
 def interpolate_nearest(
-    points: List[Tuple[float, float, float]],
+    points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
     cell_size: Optional[float] = None,
     rescale: bool = False,
@@ -1664,7 +1681,7 @@ def interpolate_nearest(
 
 
 def interpolate_rbf(
-    points: List[Tuple[float, float, float]],
+    points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
     cell_size: Optional[float] = None,
     neighbors: Optional[int] = None,
