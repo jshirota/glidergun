@@ -1629,7 +1629,7 @@ def interpolate(
     interp = interpolator_factory(coords, values)
 
     xs = np.linspace(xmin, xmax, grid.width)
-    ys = np.linspace(ymin, ymax, grid.height)
+    ys = np.linspace(ymax, ymin, grid.height)
     array = np.array([[x0, y0] for x0 in xs for y0 in ys])
 
     data = interp(array).reshape((grid.width, grid.height)).transpose(1, 0)
