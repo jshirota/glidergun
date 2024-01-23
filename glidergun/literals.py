@@ -118,3 +118,9 @@ InterpolationKernel = Literal[
     "inverse_quadratic",
     "gaussian",
 ]
+
+ResamplingMethod = Literal[
+    "bilinear",
+    "cubic",
+    "nearest",
+]

@@ -26,6 +26,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
 import scipy as sp
+from glidergun.literals import (
+    CellSizeResolution,
+    ColorMap,
+    DataType,
+    ExtentResolution,
+    InterpolationKernel,
+    ResamplingMethod,
+)
 from numpy import arctan, arctan2, cos, gradient, ndarray, pi, sin, sqrt
 from numpy.lib.stride_tricks import sliding_window_view
 from rasterio import features
@@ -46,14 +54,6 @@ from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-
-from glidergun.literals import (
-    CellSizeResolution,
-    ColorMap,
-    DataType,
-    ExtentResolution,
-    InterpolationKernel,
-)
 
 
 class Extent(NamedTuple):
@@ -803,7 +803,12 @@ class Grid:
         )
 
     def _reproject(
-        self, transform, crs, width, height, resampling: Resampling
+        self,
+        transform,
+        crs,
+        width,
+        height,
+        resampling: Union[Resampling, ResamplingMethod],
     ) -> "Grid":
         source = self * 1 if self.dtype == "bool" else self
         destination = np.ones((round(height), round(width))) * np.nan
@@ -816,7 +821,9 @@ class Grid:
             dst_transform=transform,
             dst_crs=crs,
             dst_nodata=self.nodata,
-            resampling=resampling,
+            resampling=Resampling[resampling]
+            if isinstance(resampling, str)
+            else resampling,
         )
         result = _create(destination, crs, transform)
         if self.dtype == "bool":
@@ -824,19 +831,27 @@ class Grid:
         return con(result == result.nodata, np.nan, result)
 
     def project(
-        self, epsg: Union[int, CRS], resampling: Resampling = Resampling.nearest
+        self,
+        epsg: Union[int, CRS],
+        resampling: Union[Resampling, ResamplingMethod] = "nearest",
     ) -> "Grid":
         crs = CRS.from_epsg(epsg) if isinstance(epsg, int) else epsg
         transform, width, height = calculate_default_transform(
             self.crs, crs, self.width, self.height, *self.extent
         )
-        return self._reproject(transform, crs, width, height, resampling)
+        return self._reproject(
+            transform,
+            crs,
+            width,
+            height,
+            Resampling[resampling] if isinstance(resampling, str) else resampling,
+        )
 
     def _resample(
         self,
         extent: Tuple[float, float, float, float],
         cell_size: float,
-        resampling: Resampling,
+        resampling: Union[Resampling, ResamplingMethod],
     ) -> "Grid":
         (xmin, ymin, xmax, ymax) = extent
         xoff = (xmin - self.xmin) / self.transform.a
@@ -852,7 +867,11 @@ class Grid:
     def clip(self, extent: Tuple[float, float, float, float]):
         return self._resample(extent, self.cell_size, Resampling.nearest)
 
-    def resample(self, cell_size: float, resampling: Resampling = Resampling.nearest):
+    def resample(
+        self,
+        cell_size: float,
+        resampling: Union[Resampling, ResamplingMethod] = "nearest",
+    ):
         if self.cell_size == cell_size:
             return self
         return self._resample(self.extent, cell_size, resampling)
@@ -1654,7 +1673,7 @@ def interpolate(
     return grid.local(lambda _: data)
 
 
-def interpolate_linear(
+def interp_linear(
     points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
     cell_size: Optional[float] = None,
@@ -1667,7 +1686,7 @@ def interpolate_linear(
     return interpolate(f, points, epsg, cell_size)
 
 
-def interpolate_nearest(
+def interp_nearest(
     points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
     cell_size: Optional[float] = None,
@@ -1680,7 +1699,7 @@ def interpolate_nearest(
     return interpolate(f, points, epsg, cell_size)
 
 
-def interpolate_rbf(
+def interp_rbf(
     points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
     cell_size: Optional[float] = None,
