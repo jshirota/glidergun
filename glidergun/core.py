@@ -1375,11 +1375,29 @@ class Grid:
 
 @overload
 def grid(file: str, index: int = 1) -> Grid:
+    """Creates a new grid from a file path.
+
+    Args:
+        file (str): File path.
+        index (int, optional): Band index.  Defaults to 1.
+
+    Returns:
+        Grid: A new grid.
+    """
     ...
 
 
 @overload
 def grid(file: MemoryFile, index: int = 1) -> Grid:
+    """Creates a new grid from an in-memory file.
+
+    Args:
+        file (MemoryFile): Rasterio in-memory file.
+        index (int, optional): Band index.  Defaults to 1.
+
+    Returns:
+        Grid: A new grid.
+    """
     ...
 
 

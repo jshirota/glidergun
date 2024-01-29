@@ -295,16 +295,40 @@ class Stack:
 
 @overload
 def stack(*grids: str) -> Stack:
+    """Creates a new stack from file paths.
+
+    Args:
+        grids (str): File paths.
+
+    Returns:
+        Stack: A new stack.
+    """
     ...
 
 
 @overload
 def stack(*grids: MemoryFile) -> Stack:
+    """Creates a new stack from in-memory files.
+
+    Args:
+        grids (str): Rasterio in-memory files.
+
+    Returns:
+        Stack: A new stack.
+    """
     ...
 
 
 @overload
 def stack(*grids: Grid) -> Stack:
+    """Creates a new stack from grids.
+
+    Args:
+        grids (str): Grids.
+
+    Returns:
+        Stack: A new stack.
+    """
     ...
 
 
