@@ -4,6 +4,8 @@
 pip install glidergun
 ```
 
+[![Glidergun](https://img.youtube.com/vi/Am0krE5AJiU/0.jpg)](https://youtu.be/Am0krE5AJiU)
+
 ## creation / io
 - grid
 - stack
