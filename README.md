@@ -7,9 +7,6 @@ pip install glidergun
 ### Overview
 [![Glidergun](https://img.youtube.com/vi/Am0krE5AJiU/0.jpg)](https://youtu.be/Am0krE5AJiU)
 
-### Focal Functions
-[![Glidergun](https://img.youtube.com/vi/gA_wEAaAoa8/0.jpg)](https://youtu.be/gA_wEAaAoa8)
-
 ## creation / io
 - grid
 - stack
