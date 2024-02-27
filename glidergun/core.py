@@ -1008,7 +1008,7 @@ class Grid:
         g2 = (self - min) / (max - min)
         g3 = con(g2 < 0.0, 0.0, g2)
         g4 = con(g3 > 1.0, 1.0, g3)
-        return g4 * 254 + 1
+        return g4 * 253 + 1
 
     def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
         return GridEstimator(model).fit(self, *explanatory_grids)
