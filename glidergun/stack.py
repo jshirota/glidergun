@@ -186,6 +186,9 @@ class Stack:
     def scale(self, scaler: Optional[Scaler] = None, **fit_params):
         return self.each(lambda g: g.scale(scaler, **fit_params))
 
+    def percent_clip(self, percent: float = 0.1):
+        return self.each(lambda g: g.percent_clip(percent))
+
     def plot(self, *rgb: int):
         return dataclasses.replace(self, _rgb=rgb)
 
@@ -246,14 +249,12 @@ class Stack:
         return self.each(lambda g: g.type(dtype))
 
     @overload
-    def save(self, file: str, dtype: Optional[DataType] = None, driver: str = ""):
-        ...
+    def save(self, file: str, dtype: Optional[DataType] = None, driver: str = ""): ...
 
     @overload
     def save(
         self, file: MemoryFile, dtype: Optional[DataType] = None, driver: str = ""
-    ):
-        ...
+    ): ...
 
     def save(self, file, dtype: Optional[DataType] = None, driver: str = ""):
         g = self.grids[0]
@@ -339,9 +340,9 @@ def stack(*grids) -> Stack:
         if isinstance(grid, Grid):
             bands.append(grid)
         else:
-            with rasterio.open(grid) if isinstance(
-                grid, str
-            ) else grid.open() as dataset:
+            with (
+                rasterio.open(grid) if isinstance(grid, str) else grid.open()
+            ) as dataset:
                 for index in dataset.indexes:
                     band = _read(dataset, index)
                     bands.append(band)

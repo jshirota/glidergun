@@ -1002,6 +1002,14 @@ class Grid:
             scaler = QuantileTransformer(n_quantiles=10)
         return self.local(lambda a: scaler.fit_transform(a, **fit_params))
 
+    def percent_clip(self, percent: float = 0.1):
+        min: Any = np.nanpercentile(self.data, percent)
+        max: Any = np.nanpercentile(self.data, (100 - percent))
+        g2 = (self - min) / (max - min)
+        g3 = con(g2 < 0.0, 0.0, g2)
+        g4 = con(g3 > 1.0, 1.0, g3)
+        return g4 * 254 + 1
+
     def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
         return GridEstimator(model).fit(self, *explanatory_grids)
 
