@@ -1,4 +1,7 @@
 # flake8: noqa
+import warnings
+warnings.filterwarnings("ignore")
+
 import glidergun.ipython
 from glidergun.core import (
     Extent,

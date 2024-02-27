@@ -1,5 +1,4 @@
 import dataclasses
-import warnings
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Tuple, Union, overload
 
@@ -35,8 +34,13 @@ class Stack:
             f"image: {g.width}x{g.height} {g.dtype} | "
             + f"crs: {g.crs} | "
             + f"cell: {g.cell_size} | "
-            + f"count: {len(self.grids)}"
+            + f"count: {len(self.grids)} | "
+            + f"rgb: {self._rgb}"
         )
+
+    @property
+    def crs(self) -> CRS:
+        return self.grids[0].crs
 
     @property
     def width(self) -> int:
@@ -220,9 +224,7 @@ class Stack:
         )
 
     def each(self, func: Callable[[Grid], Grid]):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            return stack(*map(func, self.grids))
+        return stack(*map(func, self.grids))
 
     def clip(self, extent: Tuple[float, float, float, float]):
         return self.each(lambda g: g.clip(extent))

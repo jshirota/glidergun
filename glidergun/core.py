@@ -2,7 +2,6 @@ import dataclasses
 import hashlib
 import pickle
 import sys
-import warnings
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -357,6 +356,9 @@ class Grid:
         l_adjusted, r_adjusted = standardize(left, right)
 
         return self._create(op(l_adjusted.data, r_adjusted.data))
+
+    def percentile(self, percent: float) -> float:
+        return np.nanpercentile(self.data, percent)  # type: ignore
 
     def local(self, func: Callable[[ndarray], Any]):
         return self._create(func(self.data))
@@ -1003,8 +1005,8 @@ class Grid:
         return self.local(lambda a: scaler.fit_transform(a, **fit_params))
 
     def percent_clip(self, percent: float = 0.1):
-        min: Any = np.nanpercentile(self.data, percent)
-        max: Any = np.nanpercentile(self.data, (100 - percent))
+        min = self.percentile(percent)
+        max = self.percentile(100 - percent)
         g2 = (self - min) / (max - min)
         g3 = con(g2 < 0.0, 0.0, g2)
         g4 = con(g3 > 1.0, 1.0, g3)
@@ -1527,9 +1529,7 @@ def _batch(
             for g in grids1
         ]
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            grids3 = func(tuple(grids2))
+        grids3 = func(tuple(grids2))
 
         grids4 = [
             g.clip(

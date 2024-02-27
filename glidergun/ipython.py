@@ -19,7 +19,10 @@ def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
         n = 2000 / max(obj.width, obj.height)
 
         if n < 1:
-            obj = obj.resample(obj.cell_size / n).percent_clip()
+            obj = obj.resample(obj.cell_size / n)
+
+        if obj.dtype != "bool":
+            obj = obj.percent_clip()
 
         if isinstance(obj, Grid):
             plt.imshow(obj.data, cmap=color)
@@ -106,13 +109,15 @@ if ipython:
     formatter.for_type(Stack, html)
     formatter.for_type(
         tuple,
-        lambda items: f"""
+        lambda items: (
+            f"""
             <table>
                 <tr style="text-align: left">
                     {"".join(f"<td>{html(item)}</td>" for item in items)}
                 </tr>
             </table>
         """
-        if all(isinstance(item, Grid) or isinstance(item, Stack) for item in items)
-        else f"{items}",
+            if all(isinstance(item, Grid) or isinstance(item, Stack) for item in items)
+            else f"{items}"
+        ),
     )
