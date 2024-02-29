@@ -5,17 +5,21 @@ pip install glidergun
 ```
 
 ### Overview
+
 [![Glidergun](https://img.youtube.com/vi/Am0krE5AJiU/0.jpg)](https://youtu.be/Am0krE5AJiU)
 
 ## creation / io
+
 - grid
 - stack
 - save
 
 ## operators
+
 - most overloadable Python operators
 
 ## properties
+
 - width
 - height
 - dtype
@@ -32,6 +36,7 @@ pip install glidergun
 - md5
 
 ## local
+
 - local (higher order)
 - is_nan
 - abs
@@ -52,6 +57,7 @@ pip install glidergun
 - uniform_filter1d
 
 ## focal
+
 - focal (higher order)
 - focal_mean
 - focal_std
@@ -84,6 +90,7 @@ pip install glidergun
 - focal_ttest_ind
 
 ## zonal
+
 - zonal (higher order)
 - zonal_mean
 - zonal_std
@@ -114,12 +121,14 @@ pip install glidergun
 - zonal_median_abs_deviation
 
 ## interpolation
+
 - interpolate (higher order)
 - interp_linear
 - interp_nearest
 - interp_rbf
 
 ## regression / classification
+
 - fit (higher order)
 - fit_linear_regression
 - fit_decision_tree_classification
@@ -130,11 +139,13 @@ pip install glidergun
 - fit_random_forest_regression
 
 ## surface
+
 - aspect
 - slope
 - hillshade
 
 ## conversion, etc.
+
 - clip
 - con
 - fill_nan
@@ -155,5 +166,6 @@ pip install glidergun
 - to_stack
 
 ## ipython
+
 - plot (Matplotlib)
 - map (Folium)

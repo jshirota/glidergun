@@ -1,6 +1,9 @@
 # flake8: noqa
+import sys
 import warnings
-warnings.filterwarnings("ignore")
+
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
 
 import glidergun.ipython
 from glidergun.core import (
@@ -12,6 +15,7 @@ from glidergun.core import (
     interp_linear,
     interp_nearest,
     interp_rbf,
+    load_model,
     maximum,
     mean,
     minimum,

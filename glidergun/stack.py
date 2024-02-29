@@ -259,18 +259,22 @@ class Stack:
     ): ...
 
     def save(self, file, dtype: Optional[DataType] = None, driver: str = ""):
-        g = self.grids[0]
-
-        if dtype is None:
-            dtype = self.dtype
+        if (
+            isinstance(file, str)
+            and file.lower().endswith(".jpg")
+            or file.lower().endswith(".png")
+        ):
+            grids = self.percent_clip().grids
+            dtype = "uint8"
+        else:
+            grids = self.grids
+            if dtype is None:
+                dtype = self.dtype
 
         nodata = _nodata(dtype)
 
-        grids = (
-            self.grids
-            if nodata is None
-            else self.each(lambda g: con(g.is_nan(), nodata, g)).grids
-        )
+        if nodata is not None:
+            grids = tuple(con(g.is_nan(), nodata, g) for g in grids)
 
         if isinstance(file, str):
             with rasterio.open(
@@ -280,7 +284,7 @@ class Stack:
                 count=len(grids),
                 dtype=dtype,
                 nodata=nodata,
-                **_metadata(g),
+                **_metadata(self.grids[0]),
             ) as dataset:
                 for index, grid in enumerate(grids):
                     dataset.write(grid.data, index + 1)
@@ -290,7 +294,7 @@ class Stack:
                 count=len(grids),
                 dtype=dtype,
                 nodata=nodata,
-                **_metadata(g),
+                **_metadata(self.grids[0]),
             ) as dataset:
                 for index, grid in enumerate(grids):
                     dataset.write(grid.data, index + 1)

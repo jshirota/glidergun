@@ -21,8 +21,7 @@ def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
         if n < 1:
             obj = obj.resample(obj.cell_size / n)
 
-        if obj.dtype != "bool":
-            obj = obj.percent_clip()
+        obj = obj.percent_clip()
 
         if isinstance(obj, Grid):
             plt.imshow(obj.data, cmap=color)

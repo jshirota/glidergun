@@ -25,14 +25,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
 import scipy as sp
-from glidergun.literals import (
-    CellSizeResolution,
-    ColorMap,
-    DataType,
-    ExtentResolution,
-    InterpolationKernel,
-    ResamplingMethod,
-)
 from numpy import arctan, arctan2, cos, gradient, ndarray, pi, sin, sqrt
 from numpy.lib.stride_tricks import sliding_window_view
 from rasterio import features
@@ -53,6 +45,15 @@ from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+
+from glidergun.literals import (
+    CellSizeResolution,
+    ColorMap,
+    DataType,
+    ExtentResolution,
+    InterpolationKernel,
+    ResamplingMethod,
+)
 
 
 class Extent(NamedTuple):
@@ -823,9 +824,9 @@ class Grid:
             dst_transform=transform,
             dst_crs=crs,
             dst_nodata=self.nodata,
-            resampling=Resampling[resampling]
-            if isinstance(resampling, str)
-            else resampling,
+            resampling=(
+                Resampling[resampling] if isinstance(resampling, str) else resampling
+            ),
         )
         result = _create(destination, crs, transform)
         if self.dtype == "bool":
@@ -1005,12 +1006,23 @@ class Grid:
         return self.local(lambda a: scaler.fit_transform(a, **fit_params))
 
     def percent_clip(self, percent: float = 0.1):
-        min = self.percentile(percent)
-        max = self.percentile(100 - percent)
-        g2 = (self - min) / (max - min)
-        g3 = con(g2 < 0.0, 0.0, g2)
-        g4 = con(g3 > 1.0, 1.0, g3)
-        return g4 * 253 + 1
+        if self.dtype == "bool":
+            return self
+
+        if self.min > 0 and self.max < 255:
+            return self
+
+        min_value = self.percentile(percent)
+        max_value = self.percentile(100 - percent)
+
+        if min_value == max_value:
+            return self
+
+        g1 = (self - min_value) / (max_value - min_value)
+        g2 = con(g1 < 0.0, 0.0, g1)
+        g3 = con(g2 > 1.0, 1.0, g2)
+
+        return g3 * 253 + 1
 
     def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
         return GridEstimator(model).fit(self, *explanatory_grids)
@@ -1344,22 +1356,33 @@ class Grid:
         return self.local(lambda data: np.asanyarray(data, dtype=dtype))
 
     @overload
-    def save(self, file: str, dtype: Optional[DataType] = None, driver: str = ""):
-        ...
+    def save(self, file: str, dtype: Optional[DataType] = None, driver: str = ""): ...
 
     @overload
     def save(
         self, file: MemoryFile, dtype: Optional[DataType] = None, driver: str = ""
-    ):
-        ...
+    ): ...
 
     def save(self, file, dtype: Optional[DataType] = None, driver: str = ""):
-        if dtype is None:
-            dtype = self.dtype
+        grid = self * 1 if self.dtype == "bool" else self
+
+        if (
+            isinstance(file, str)
+            and file.lower().endswith(".gif")
+            or file.lower().endswith(".jpg")
+            or file.lower().endswith(".png")
+        ):
+            grid = grid.percent_clip()
+            dtype = "uint8"
+        else:
+            grid = grid
+            if dtype is None:
+                dtype = grid.dtype
 
         nodata = _nodata(dtype)
 
-        grid = self if nodata is None else con(self.is_nan(), nodata, self)
+        if nodata is not None:
+            grid = con(grid.is_nan(), nodata, grid)
 
         if isinstance(file, str):
             with rasterio.open(
@@ -1579,6 +1602,10 @@ def minimum(*grids: Grid) -> Grid:
 
 def maximum(*grids: Grid) -> Grid:
     return _aggregate(np.max, *grids)
+
+
+def load_model(file: str) -> GridEstimator[Any]:
+    return GridEstimator.load(file)
 
 
 def mosaic(*grids: Grid) -> Grid:
