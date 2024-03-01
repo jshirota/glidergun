@@ -47,7 +47,6 @@ from sklearn.preprocessing import QuantileTransformer, StandardScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 from glidergun.literals import (
-    CellSizeResolution,
     ColorMap,
     DataType,
     ExtentResolution,
@@ -76,6 +75,17 @@ class Extent(NamedTuple):
 
 Operand = Union["Grid", float, int]
 Value = Union[float, int]
+
+
+class CellSize(NamedTuple):
+    x: float
+    y: float
+
+    def __mul__(self, n: float):
+        return CellSize(self.x * n, self.y * n)
+
+    def __truediv__(self, n: float):
+        return CellSize(self.x / n, self.y / n)
 
 
 class Point(NamedTuple):
@@ -163,7 +173,7 @@ class Grid:
             + f"mean: {self.mean:.{d}f} | "
             + f"std: {self.std:.{d}f} | "
             + f"crs: {self.crs} | "
-            + f"cell: {self.cell_size}"
+            + f"cell: {self.cell_size.x}, {self.cell_size.y}"
         )
 
     @property
@@ -223,8 +233,8 @@ class Grid:
         return self._get("_max", lambda: np.nanmax(self.data))
 
     @property
-    def cell_size(self) -> float:
-        return self.transform.a
+    def cell_size(self) -> CellSize:
+        return CellSize(self.transform.a, -self.transform.e)
 
     @property
     def md5(self) -> str:
@@ -853,18 +863,21 @@ class Grid:
     def _resample(
         self,
         extent: Tuple[float, float, float, float],
-        cell_size: float,
+        cell_size: Tuple[float, float],
         resampling: Union[Resampling, ResamplingMethod],
     ) -> "Grid":
         (xmin, ymin, xmax, ymax) = extent
         xoff = (xmin - self.xmin) / self.transform.a
         yoff = (ymax - self.ymax) / self.transform.e
-        scaling = cell_size / self.cell_size
+        scaling_x = cell_size[0] / self.cell_size.x
+        scaling_y = cell_size[1] / self.cell_size.y
         transform = (
-            self.transform * Affine.translation(xoff, yoff) * Affine.scale(scaling)
+            self.transform
+            * Affine.translation(xoff, yoff)
+            * Affine.scale(scaling_x, scaling_y)
         )
-        width = (xmax - xmin) / abs(self.transform.a) / scaling
-        height = (ymax - ymin) / abs(self.transform.e) / scaling
+        width = (xmax - xmin) / abs(self.transform.a) / scaling_x
+        height = (ymax - ymin) / abs(self.transform.e) / scaling_y
         return self._reproject(transform, self.crs, width, height, resampling)
 
     def clip(self, extent: Tuple[float, float, float, float]):
@@ -872,9 +885,11 @@ class Grid:
 
     def resample(
         self,
-        cell_size: float,
+        cell_size: Union[Tuple[float, float], float],
         resampling: Union[Resampling, ResamplingMethod] = "nearest",
     ):
+        if isinstance(cell_size, (int, float)):
+            cell_size = (cell_size, cell_size)
         if self.cell_size == cell_size:
             return self
         return self._resample(self.extent, cell_size, resampling)
@@ -953,20 +968,23 @@ class Grid:
                 ymax = y
         if xmin is None or ymin is None or xmax is None or ymax is None:
             raise ValueError("None of the cells has a value.")
-        n = self.cell_size / 2
-        return Extent(xmin - n, ymin - n, xmax + n, ymax + n)
+        return Extent(
+            xmin - self.cell_size.x / 2,
+            ymin - self.cell_size.y / 2,
+            xmax + self.cell_size.x / 2,
+            ymax + self.cell_size.y / 2,
+        )
 
     def shrink(self):
         return self.clip(self.data_extent())
 
     def to_points(self) -> Iterable[Point]:
-        n = self.cell_size / 2
         for y, row in enumerate(self.data):
             for x, value in enumerate(row):
                 if np.isfinite(value):
                     yield Point(
-                        self.xmin + x * self.cell_size + n,
-                        self.ymax - y * self.cell_size - n,
+                        self.xmin + (x + 0.5) * self.cell_size.x,
+                        self.ymax - (y + 0.5) * self.cell_size.y,
                         value,
                     )
 
@@ -1543,10 +1561,10 @@ def _batch(
         grids2 = [
             g.clip(
                 (
-                    grid.xmin + (xmin - buffer) * cell_size,
-                    grid.ymin + (ymin - buffer) * cell_size,
-                    grid.xmin + (xmax + buffer) * cell_size,
-                    grid.ymin + (ymax + buffer) * cell_size,
+                    grid.xmin + (xmin - buffer) * cell_size.x,
+                    grid.ymin + (ymin - buffer) * cell_size.y,
+                    grid.xmin + (xmax + buffer) * cell_size.x,
+                    grid.ymin + (ymax + buffer) * cell_size.y,
                 )
             )
             for g in grids1
@@ -1557,10 +1575,10 @@ def _batch(
         grids4 = [
             g.clip(
                 (
-                    grid.xmin + xmin * cell_size,
-                    grid.ymin + ymin * cell_size,
-                    grid.xmin + xmax * cell_size,
-                    grid.ymin + ymax * cell_size,
+                    grid.xmin + xmin * cell_size.x,
+                    grid.ymin + ymin * cell_size.y,
+                    grid.xmin + xmax * cell_size.x,
+                    grid.ymin + ymax * cell_size.y,
                 )
             )
             for g in grids3
@@ -1634,7 +1652,7 @@ def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
 def standardize(
     *grids: Grid,
     extent: Union[Extent, ExtentResolution] = "intersect",
-    cell_size: Union[float, CellSizeResolution] = "largest",
+    cell_size: Union[Tuple[float, float], float, None] = None,
 ) -> Tuple[Grid, ...]:
     if len(grids) == 1:
         return tuple(grids)
@@ -1644,16 +1662,12 @@ def standardize(
     if len(crs_set) > 1:
         raise ValueError("Input grids must have the same CRS.")
 
-    if isinstance(cell_size, float):
-        cell_size_standardized = cell_size
+    if isinstance(cell_size, (int, float)):
+        cell_size_standardized = (cell_size, cell_size)
+    elif cell_size is None:
+        cell_size_standardized = grids[0].cell_size
     else:
-        cell_sizes = [g.cell_size for g in grids]
-        if cell_size == "smallest":
-            cell_size_standardized = min(cell_sizes)
-        elif cell_size == "largest":
-            cell_size_standardized = max(cell_sizes)
-        else:
-            cell_size_standardized = cell_sizes[0]
+        cell_size_standardized = cell_size
 
     if isinstance(extent, Extent):
         extent_standardized = extent
@@ -1678,15 +1692,22 @@ def standardize(
 
 
 def create(
-    extent: Tuple[float, float, float, float], epsg: Union[int, CRS], cell_size: float
+    extent: Tuple[float, float, float, float],
+    epsg: Union[int, CRS],
+    cell_size: Union[Tuple[float, float], float],
 ):
+    cell_size = (
+        CellSize(cell_size, cell_size)
+        if isinstance(cell_size, (int, float))
+        else CellSize(*cell_size)
+    )
     xmin, ymin, xmax, ymax = extent
-    width = int((xmax - xmin) / cell_size)
-    height = int((ymax - ymin) / cell_size)
-    xmin = xmax - cell_size * width
-    ymax = ymin + cell_size * height
+    width = int((xmax - xmin) / cell_size.x)
+    height = int((ymax - ymin) / cell_size.y)
+    xmin = xmax - cell_size.x * width
+    ymax = ymin + cell_size.y * height
     crs = CRS.from_epsg(epsg) if isinstance(epsg, int) else epsg
-    transform = Affine(cell_size, 0, xmin, 0, -cell_size, ymax, 0, 0, 1)
+    transform = Affine(cell_size.x, 0, xmin, 0, -cell_size.y, ymax, 0, 0, 1)
     return Grid(np.zeros((height, width), "uint8"), crs, transform)
 
 
@@ -1694,7 +1715,7 @@ def interpolate(
     interpolator_factory: Callable[[ndarray, ndarray], Any],
     points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
-    cell_size: Optional[float] = None,
+    cell_size: Union[Tuple[float, float], float],
 ):
     coord_array = []
     value_array = []
@@ -1707,20 +1728,12 @@ def interpolate(
     values = np.array(value_array)
     x, y = coords.transpose(1, 0)
     xmin, ymin, xmax, ymax = x.min(), y.min(), x.max(), y.max()
-    buffer = max(xmax - xmin, ymax - ymin) / 10
-
-    extent = Extent(xmin - buffer, ymin - buffer, xmax + buffer, ymax + buffer)
-    dx = extent.xmax - extent.xmin
-    dy = extent.ymax - extent.ymin
-
-    grid = create(extent, epsg, max(dx, dy) / 1000 if cell_size is None else cell_size)
-
+    extent = Extent(xmin, ymin, xmax, ymax)
+    grid = create(extent, epsg, cell_size)
     interp = interpolator_factory(coords, values)
-
     xs = np.linspace(xmin, xmax, grid.width)
     ys = np.linspace(ymax, ymin, grid.height)
     array = np.array([[x0, y0] for x0 in xs for y0 in ys])
-
     data = interp(array).reshape((grid.width, grid.height)).transpose(1, 0)
 
     return grid.local(lambda _: data)
@@ -1729,7 +1742,7 @@ def interpolate(
 def interp_linear(
     points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
-    cell_size: Optional[float] = None,
+    cell_size: Union[Tuple[float, float], float],
     fill_value: float = np.nan,
     rescale: bool = False,
 ):
@@ -1742,7 +1755,7 @@ def interp_linear(
 def interp_nearest(
     points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
-    cell_size: Optional[float] = None,
+    cell_size: Union[Tuple[float, float], float],
     rescale: bool = False,
     tree_options: Any = None,
 ):
@@ -1755,7 +1768,7 @@ def interp_nearest(
 def interp_rbf(
     points: Iterable[Tuple[float, float, Value]],
     epsg: Union[int, CRS],
-    cell_size: Optional[float] = None,
+    cell_size: Union[Tuple[float, float], float],
     neighbors: Optional[int] = None,
     smoothing: float = 0,
     kernel: InterpolationKernel = "thin_plate_spline",

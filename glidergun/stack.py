@@ -9,6 +9,7 @@ from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
 
 from glidergun.core import (
+    CellSize,
     Extent,
     Grid,
     Scaler,
@@ -33,7 +34,7 @@ class Stack:
         return (
             f"image: {g.width}x{g.height} {g.dtype} | "
             + f"crs: {g.crs} | "
-            + f"cell: {g.cell_size} | "
+            + f"cell: {g.cell_size.x}, {g.cell_size.y} | "
             + f"count: {len(self.grids)} | "
             + f"rgb: {self._rgb}"
         )
@@ -71,7 +72,7 @@ class Stack:
         return self.grids[0].ymax
 
     @property
-    def cell_size(self) -> float:
+    def cell_size(self) -> CellSize:
         return self.grids[0].cell_size
 
     @property
@@ -234,7 +235,11 @@ class Stack:
     ):
         return self.each(lambda g: g.project(epsg, resampling))
 
-    def resample(self, cell_size: float, resampling: Resampling = Resampling.nearest):
+    def resample(
+        self,
+        cell_size: Union[Tuple[float, float], float],
+        resampling: Resampling = Resampling.nearest,
+    ):
         return self.each(lambda g: g.resample(cell_size, resampling))
 
     def zip_with(self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid]):
