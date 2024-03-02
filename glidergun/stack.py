@@ -79,6 +79,10 @@ class Stack:
     def extent(self) -> Extent:
         return self.grids[0].extent
 
+    @property
+    def md5s(self) -> Tuple[str, ...]:
+        return tuple(g.md5 for g in self.grids)
+
     def __add__(self, n: Operand):
         return self._apply(n, lambda g, n: g.__add__(n))
 
@@ -191,8 +195,11 @@ class Stack:
     def scale(self, scaler: Optional[Scaler] = None, **fit_params):
         return self.each(lambda g: g.scale(scaler, **fit_params))
 
-    def percent_clip(self, percent: float = 0.1):
-        return self.each(lambda g: g.percent_clip(percent))
+    def percent_clip(self, min_percent: float, max_percent: float):
+        return self.each(lambda g: g.percent_clip(min_percent, max_percent))
+
+    def percent_clip_to_uint8_range(self):
+        return self.each(lambda g: g.percent_clip_to_uint8_range())
 
     def plot(self, *rgb: int):
         return dataclasses.replace(self, _rgb=rgb)
@@ -271,7 +278,7 @@ class Stack:
             and file.lower().endswith(".jpg")
             or file.lower().endswith(".png")
         ):
-            grids = self.percent_clip().grids
+            grids = self.percent_clip_to_uint8_range().grids
             dtype = "uint8"
         else:
             grids = self.grids

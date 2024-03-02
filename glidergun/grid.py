@@ -1019,24 +1019,34 @@ class Grid:
             scaler = QuantileTransformer(n_quantiles=10)
         return self.local(lambda a: scaler.fit_transform(a, **fit_params))
 
-    def percent_clip(self, percent: float = 0.1):
-        if self.dtype == "bool":
+    def stretch(self, min_value: Value, max_value: Value):
+        expected_range = max_value - min_value
+        actual_range = self.max - self.min
+
+        if actual_range == 0:
             return self
 
-        if self.min > 0 and self.max < 255:
-            return self
+        return (self - self.min) * expected_range / actual_range + min_value
 
-        min_value = self.percentile(percent)
-        max_value = self.percentile(100 - percent)
+    def cap_min(self, value: Operand):
+        return con(self < value, value, self)
+
+    def cap_max(self, value: Operand):
+        return con(self > value, value, self)
+
+    def percent_clip(self, min_percent: float, max_percent: float):
+        min_value = self.percentile(min_percent)
+        max_value = self.percentile(max_percent)
 
         if min_value == max_value:
             return self
 
-        g1 = (self - min_value) / (max_value - min_value)
-        g2 = con(g1 < 0.0, 0.0, g1)
-        g3 = con(g2 > 1.0, 1.0, g2)
+        return self.cap_min(min_value).cap_max(max_value)
 
-        return g3 * 253 + 1
+    def percent_clip_to_uint8_range(self):
+        if self.dtype == "bool" or self.min > 0 and self.max < 255:
+            return self
+        return self.percent_clip(0.1, 99.9).stretch(1, 254)
 
     def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
         return GridEstimator(model).fit(self, *explanatory_grids)
@@ -1095,7 +1105,7 @@ class Grid:
             or file.lower().endswith(".jpg")
             or file.lower().endswith(".png")
         ):
-            grid = grid.percent_clip()
+            grid = grid.percent_clip_to_uint8_range()
             dtype = "uint8"
         else:
             grid = grid
