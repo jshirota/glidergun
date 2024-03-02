@@ -6,7 +6,7 @@ import IPython
 import matplotlib.pyplot as plt
 import numpy as np
 
-from glidergun.core import Grid
+from glidergun.grid import Grid
 from glidergun.stack import Stack
 
 

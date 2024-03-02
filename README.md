@@ -130,13 +130,6 @@ pip install glidergun
 ## regression / classification
 
 - fit (higher order)
-- fit_linear_regression
-- fit_decision_tree_classification
-- fit_decision_tree_regression
-- fit_mlp_classification
-- fit_mlp_regression
-- fit_random_forest_classification
-- fit_random_forest_regression
 
 ## surface
 

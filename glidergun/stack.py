@@ -8,7 +8,7 @@ from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
 
-from glidergun.core import (
+from glidergun.grid import (
     CellSize,
     Extent,
     Grid,
@@ -256,12 +256,14 @@ class Stack:
         return self.each(lambda g: g.type(dtype))
 
     @overload
-    def save(self, file: str, dtype: Optional[DataType] = None, driver: str = ""): ...
+    def save(
+        self, file: str, dtype: Optional[DataType] = None, driver: str = ""
+    ) -> None: ...
 
     @overload
     def save(
         self, file: MemoryFile, dtype: Optional[DataType] = None, driver: str = ""
-    ): ...
+    ) -> None: ...
 
     def save(self, file, dtype: Optional[DataType] = None, driver: str = ""):
         if (

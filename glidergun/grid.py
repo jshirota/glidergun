@@ -9,12 +9,9 @@ from typing import (
     Generic,
     Iterable,
     List,
-    Literal,
-    Mapping,
     NamedTuple,
     Optional,
     Protocol,
-    Sequence,
     Tuple,
     TypeVar,
     Union,
@@ -40,11 +37,7 @@ from scipy.interpolate import (
 )
 from shapely import Polygon
 from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.linear_model import LinearRegression
-from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 from glidergun.literals import (
     ColorMap,
@@ -82,6 +75,9 @@ class CellSize(NamedTuple):
     y: float
 
     def __mul__(self, n: float):
+        return CellSize(self.x * n, self.y * n)
+
+    def __rmul__(self, n: float):
         return CellSize(self.x * n, self.y * n)
 
     def __truediv__(self, n: float):
@@ -1045,299 +1041,6 @@ class Grid:
     def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
         return GridEstimator(model).fit(self, *explanatory_grids)
 
-    def fit_linear_regression(
-        self,
-        *explanatory_grids: "Grid",
-        fit_intercept: bool = True,
-        copy_X: bool = True,
-        n_jobs: Optional[int] = None,
-        positive: bool = False,
-    ) -> GridEstimator[LinearRegression]:
-        return self.fit(
-            LinearRegression(
-                fit_intercept=fit_intercept,
-                copy_X=copy_X,
-                n_jobs=n_jobs,
-                positive=positive,
-            ),
-            *explanatory_grids,
-        )
-
-    def fit_decision_tree_classification(
-        self,
-        *explanatory_grids: "Grid",
-        criterion: Literal["gini", "entropy", "log_loss"] = "gini",
-        splitter: Literal["best", "random"] = "best",
-        max_depth: Optional[int] = None,
-        min_samples_split: Union[float, int] = 2,
-        min_samples_leaf: Union[float, int] = 1,
-        min_weight_fraction_leaf: float = 0,
-        max_features: Union[float, int, Literal["auto", "sqrt", "log2"], None] = None,
-        random_state: Union[int, Any, None] = None,
-        max_leaf_nodes: Optional[int] = None,
-        min_impurity_decrease: float = 0,
-        class_weight: Union[
-            Mapping[Any, Any], str, Sequence[Mapping[Any, Any]], None
-        ] = None,
-        ccp_alpha: float = 0,
-    ) -> GridEstimator[DecisionTreeClassifier]:
-        return self.fit(
-            DecisionTreeClassifier(
-                criterion=criterion,
-                splitter=splitter,
-                max_depth=max_depth,
-                min_samples_split=min_samples_split,
-                min_samples_leaf=min_samples_leaf,
-                min_weight_fraction_leaf=min_weight_fraction_leaf,
-                max_features=max_features,
-                random_state=random_state,
-                max_leaf_nodes=max_leaf_nodes,
-                min_impurity_decrease=min_impurity_decrease,
-                class_weight=class_weight,
-                ccp_alpha=ccp_alpha,
-            ),
-            *explanatory_grids,
-        )
-
-    def fit_decision_tree_regression(
-        self,
-        *explanatory_grids: "Grid",
-        criterion: Literal[
-            "squared_error", "friedman_mse", "absolute_error", "poisson"
-        ] = "squared_error",
-        splitter: Literal["best", "random"] = "best",
-        max_depth: Optional[int] = None,
-        min_samples_split: Union[float, int] = 2,
-        min_samples_leaf: Union[float, int] = 1,
-        min_weight_fraction_leaf: float = 0,
-        max_features: Union[float, int, Literal["auto", "sqrt", "log2"], None] = None,
-        random_state: Union[int, Any, None] = None,
-        max_leaf_nodes: Optional[int] = None,
-        min_impurity_decrease: float = 0,
-        ccp_alpha: float = 0,
-    ) -> GridEstimator[DecisionTreeRegressor]:
-        return self.fit(
-            DecisionTreeRegressor(
-                criterion=criterion,
-                splitter=splitter,
-                max_depth=max_depth,
-                min_samples_split=min_samples_split,
-                min_samples_leaf=min_samples_leaf,
-                min_weight_fraction_leaf=min_weight_fraction_leaf,
-                max_features=max_features,
-                random_state=random_state,
-                max_leaf_nodes=max_leaf_nodes,
-                min_impurity_decrease=min_impurity_decrease,
-                ccp_alpha=ccp_alpha,
-            ),
-            *explanatory_grids,
-        )
-
-    def fit_mlp_classification(
-        self,
-        *explanatory_grids: "Grid",
-        hidden_layer_sizes: Tuple[int, ...] = (100,),
-        activation: Literal["relu", "identity", "logistic", "tanh"] = "relu",
-        solver: Literal["lbfgs", "sgd", "adam"] = "adam",
-        alpha: float = 0.0001,
-        batch_size: Union[int, str] = "auto",
-        learning_rate: Literal["constant", "invscaling", "adaptive"] = "constant",
-        learning_rate_init: float = 0.001,
-        power_t: float = 0.5,
-        max_iter: int = 200,
-        shuffle: bool = True,
-        random_state: Union[int, Any, None] = None,
-        tol: float = 0.0001,
-        verbose: bool = False,
-        warm_start: bool = False,
-        momentum: float = 0.9,
-        nesterovs_momentum: bool = True,
-        early_stopping: bool = False,
-        validation_fraction: float = 0.1,
-        beta_1: float = 0.9,
-        beta_2: float = 0.999,
-        epsilon: float = 1e-8,
-        n_iter_no_change: int = 10,
-        max_fun: int = 15000,
-    ) -> GridEstimator[MLPClassifier]:
-        return self.fit(
-            MLPClassifier(
-                hidden_layer_sizes=hidden_layer_sizes,  # type: ignore
-                activation=activation,
-                solver=solver,
-                alpha=alpha,
-                batch_size=batch_size,
-                learning_rate=learning_rate,
-                learning_rate_init=learning_rate_init,
-                power_t=power_t,
-                max_iter=max_iter,
-                shuffle=shuffle,
-                random_state=random_state,
-                tol=tol,
-                verbose=verbose,
-                warm_start=warm_start,
-                momentum=momentum,
-                nesterovs_momentum=nesterovs_momentum,
-                early_stopping=early_stopping,
-                validation_fraction=validation_fraction,
-                beta_1=beta_1,
-                beta_2=beta_2,
-                epsilon=epsilon,
-                n_iter_no_change=n_iter_no_change,
-                max_fun=max_fun,
-            ),
-            *explanatory_grids,
-        )
-
-    def fit_mlp_regression(
-        self,
-        *explanatory_grids: "Grid",
-        hidden_layer_sizes: Tuple[int, ...] = (100,),
-        activation: Literal["relu", "identity", "logistic", "tanh"] = "relu",
-        solver: Literal["lbfgs", "sgd", "adam"] = "adam",
-        alpha: float = 0.0001,
-        batch_size: Union[int, str] = "auto",
-        learning_rate: Literal["constant", "invscaling", "adaptive"] = "constant",
-        learning_rate_init: float = 0.001,
-        power_t: float = 0.5,
-        max_iter: int = 200,
-        shuffle: bool = True,
-        random_state: Union[int, Any, None] = None,
-        tol: float = 0.0001,
-        verbose: bool = False,
-        warm_start: bool = False,
-        momentum: float = 0.9,
-        nesterovs_momentum: bool = True,
-        early_stopping: bool = False,
-        validation_fraction: float = 0.1,
-        beta_1: float = 0.9,
-        beta_2: float = 0.999,
-        epsilon: float = 1e-8,
-        n_iter_no_change: int = 10,
-        max_fun: int = 15000,
-    ) -> GridEstimator[MLPRegressor]:
-        return self.fit(
-            MLPRegressor(
-                hidden_layer_sizes=hidden_layer_sizes,  # type: ignore
-                activation=activation,
-                solver=solver,
-                alpha=alpha,
-                batch_size=batch_size,
-                learning_rate=learning_rate,
-                learning_rate_init=learning_rate_init,
-                power_t=power_t,
-                max_iter=max_iter,
-                shuffle=shuffle,
-                random_state=random_state,
-                tol=tol,
-                verbose=verbose,
-                warm_start=warm_start,
-                momentum=momentum,
-                nesterovs_momentum=nesterovs_momentum,
-                early_stopping=early_stopping,
-                validation_fraction=validation_fraction,
-                beta_1=beta_1,
-                beta_2=beta_2,
-                epsilon=epsilon,
-                n_iter_no_change=n_iter_no_change,
-                max_fun=max_fun,
-            ),
-            *explanatory_grids,
-        )
-
-    def fit_random_forest_classification(
-        self,
-        *explanatory_grids: "Grid",
-        criterion: Literal["gini", "entropy", "log_loss"] = "gini",
-        max_depth: Optional[int] = None,
-        min_samples_split: Union[float, int] = 2,
-        min_samples_leaf: Union[float, int] = 1,
-        min_weight_fraction_leaf: float = 0,
-        max_features: Union[float, int, Literal["sqrt", "log2"]] = "sqrt",
-        max_leaf_nodes: Optional[int] = None,
-        min_impurity_decrease: float = 0,
-        bootstrap: bool = True,
-        oob_score: bool = False,
-        n_jobs: Optional[int] = None,
-        random_state: Union[int, Any, None] = None,
-        verbose: int = 0,
-        warm_start: bool = False,
-        class_weight: Union[
-            Mapping[Any, Any],
-            Sequence[Mapping[Any, Any]],
-            Literal["balanced", "balanced_subsample"],
-            None,
-        ] = None,
-        ccp_alpha: float = 0,
-        max_samples: Union[float, int, None] = None,
-    ) -> GridEstimator[RandomForestClassifier]:
-        return self.fit(
-            RandomForestClassifier(
-                criterion=criterion,
-                max_depth=max_depth,
-                min_samples_split=min_samples_split,
-                min_samples_leaf=min_samples_leaf,
-                min_weight_fraction_leaf=min_weight_fraction_leaf,
-                max_features=max_features,
-                max_leaf_nodes=max_leaf_nodes,
-                min_impurity_decrease=min_impurity_decrease,
-                bootstrap=bootstrap,
-                oob_score=oob_score,
-                n_jobs=n_jobs,
-                random_state=random_state,
-                verbose=verbose,
-                warm_start=warm_start,
-                class_weight=class_weight,
-                ccp_alpha=ccp_alpha,
-                max_samples=max_samples,
-            ),
-            *explanatory_grids,
-        )
-
-    def fit_random_forest_regression(
-        self,
-        *explanatory_grids: "Grid",
-        criterion: Literal[
-            "squared_error", "absolute_error", "friedman_mse", "poisson"
-        ] = "squared_error",
-        max_depth: Optional[int] = None,
-        min_samples_split: Union[float, int] = 2,
-        min_samples_leaf: Union[float, int] = 1,
-        min_weight_fraction_leaf: float = 0,
-        max_features: Union[float, int, Literal["sqrt", "log2"]] = 1,
-        max_leaf_nodes: Optional[int] = None,
-        min_impurity_decrease: float = 0,
-        bootstrap: bool = True,
-        oob_score: bool = False,
-        n_jobs: Optional[int] = None,
-        random_state: Union[int, Any, None] = None,
-        verbose: int = 0,
-        warm_start: bool = False,
-        ccp_alpha: float = 0,
-        max_samples: Union[float, int, None] = None,
-    ) -> GridEstimator[RandomForestRegressor]:
-        return self.fit(
-            RandomForestRegressor(
-                criterion=criterion,
-                max_depth=max_depth,
-                min_samples_split=min_samples_split,
-                min_samples_leaf=min_samples_leaf,
-                min_weight_fraction_leaf=min_weight_fraction_leaf,
-                max_features=max_features,
-                max_leaf_nodes=max_leaf_nodes,
-                min_impurity_decrease=min_impurity_decrease,
-                bootstrap=bootstrap,
-                oob_score=oob_score,
-                n_jobs=n_jobs,
-                random_state=random_state,
-                verbose=verbose,
-                warm_start=warm_start,
-                ccp_alpha=ccp_alpha,
-                max_samples=max_samples,
-            ),
-            *explanatory_grids,
-        )
-
     def plot(self, cmap: Union[ColorMap, Any]):
         return dataclasses.replace(self, _cmap=cmap)
 
@@ -1374,12 +1077,14 @@ class Grid:
         return self.local(lambda data: np.asanyarray(data, dtype=dtype))
 
     @overload
-    def save(self, file: str, dtype: Optional[DataType] = None, driver: str = ""): ...
+    def save(
+        self, file: str, dtype: Optional[DataType] = None, driver: str = ""
+    ) -> None: ...
 
     @overload
     def save(
         self, file: MemoryFile, dtype: Optional[DataType] = None, driver: str = ""
-    ): ...
+    ) -> None: ...
 
     def save(self, file, dtype: Optional[DataType] = None, driver: str = ""):
         grid = self * 1 if self.dtype == "bool" else self

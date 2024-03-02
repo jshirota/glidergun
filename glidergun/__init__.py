@@ -6,7 +6,7 @@ if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
 import glidergun.ipython
-from glidergun.core import (
+from glidergun.grid import (
     Extent,
     Grid,
     con,
