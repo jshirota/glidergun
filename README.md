@@ -6,7 +6,7 @@ pip install glidergun
 
 ### Overview
 
-[![Glidergun](https://img.youtube.com/vi/Am0krE5AJiU/0.jpg)](https://youtu.be/Am0krE5AJiU)
+[![Glidergun](https://img.youtube.com/vi/pbVG4bNb96Y/0.jpg)](https://youtu.be/pbVG4bNb96Y)
 
 ## creation / io
 
