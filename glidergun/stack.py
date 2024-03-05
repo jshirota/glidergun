@@ -17,6 +17,7 @@ from glidergun.grid import (
     _nodata,
     _read,
     con,
+    pca,
     standardize,
 )
 from glidergun.literals import DataType
@@ -201,8 +202,8 @@ class Stack:
     def percent_clip_to_uint8_range(self):
         return self.each(lambda g: g.percent_clip_to_uint8_range())
 
-    def plot(self, *rgb: int):
-        return dataclasses.replace(self, _rgb=rgb)
+    def plot(self, r: int, g: int, b: int):
+        return dataclasses.replace(self, _rgb=(r, g, b))
 
     def map(
         self,
@@ -236,6 +237,12 @@ class Stack:
 
     def clip(self, extent: Tuple[float, float, float, float]):
         return self.each(lambda g: g.clip(extent))
+
+    def extract_bands(self, *bands: int):
+        return stack(*(self.grids[i - 1] for i in bands))
+
+    def pca(self, n_components: int = 3):
+        return stack(*pca(n_components, *self.grids))
 
     def project(
         self, epsg: Union[int, CRS], resampling: Resampling = Resampling.nearest
@@ -312,6 +319,9 @@ class Stack:
             ) as dataset:
                 for index, grid in enumerate(grids):
                     dataset.write(grid.data, index + 1)
+
+    def save_plot(self, file):
+        self.extract_bands(*self._rgb).save(file)
 
 
 @overload

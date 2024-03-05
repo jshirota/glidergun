@@ -1138,6 +1138,9 @@ class Grid:
             ) as dataset:
                 dataset.write(grid.data, 1)
 
+    def save_plot(self, file):
+        self.to_stack(self._cmap).save(file)
+
 
 @overload
 def grid(file: str, index: int = 1) -> Grid:
