@@ -207,7 +207,9 @@ class Stack:
 
     def map(
         self,
-        *rgb: int,
+        r: int,
+        g: int,
+        b: int,
         opacity: float = 1.0,
         folium_map=None,
         width: int = 800,
@@ -221,7 +223,7 @@ class Stack:
 
         return _map(
             self,
-            rgb,
+            (r, g, b),
             opacity,
             folium_map,
             width,

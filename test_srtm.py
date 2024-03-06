@@ -1,16 +1,17 @@
-import glob
 import unittest
 
 from glidergun import *
 
 
-class TestLandsat(unittest.TestCase):
+class TestSrtm(unittest.TestCase):
+
     def setUp(self):
-        self.stack = stack(*glob.glob(".data/LC08*.TIF"))
+        self.grid1 = grid("./.data/n55_e008_1arc_v3.bil")
+        self.grid2 = grid("./.data/n55_e009_1arc_v3.bil")
 
     def test_properties(self):
-        self.assertEqual(self.stack.width, 2010)
-        self.assertEqual(self.stack.height, 2033)
+        self.assertEqual(self.grid1.width, 1801)
+        self.assertEqual(self.grid1.height, 3601)
 
 
 if __name__ == "__main__":
