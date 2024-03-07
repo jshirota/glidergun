@@ -15,6 +15,7 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    cast,
     overload,
 )
 
@@ -67,7 +68,6 @@ class Extent(NamedTuple):
 
 
 Operand = Union["Grid", float, int]
-Value = Union[float, int]
 
 
 class CellSize(NamedTuple):
@@ -87,7 +87,7 @@ class CellSize(NamedTuple):
 class Point(NamedTuple):
     x: float
     y: float
-    value: Value
+    value: float
 
 
 class Estimator(Protocol):
@@ -182,7 +182,7 @@ class Grid:
 
     @property
     def dtype(self) -> DataType:
-        return str(self.data.dtype)  # type: ignore
+        return cast(DataType, str(self.data.dtype))
 
     @property
     def nodata(self):
@@ -560,7 +560,7 @@ class Grid:
 
     def focal_pmean(
         self,
-        p: Value,
+        p: float,
         buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
@@ -764,7 +764,7 @@ class Grid:
     def zonal_hmean(self, zone_grid: "Grid", **kwargs):
         return self.zonal(lambda a: sp.stats.hmean(a, **kwargs), zone_grid)
 
-    def zonal_pmean(self, p: Value, zone_grid: "Grid", **kwargs):
+    def zonal_pmean(self, p: float, zone_grid: "Grid", **kwargs):
         return self.zonal(lambda a: sp.stats.pmean(a, p, **kwargs), zone_grid)
 
     def zonal_kurtosis(self, zone_grid: "Grid", **kwargs):
@@ -911,7 +911,7 @@ class Grid:
         )
         return self._create((255 * (shaded + 1) / 2))
 
-    def reclass(self, *mappings: Tuple[Value, Value, Value]):
+    def reclass(self, *mappings: Tuple[float, float, float]):
         conditions = [
             (self.data >= min) & (self.data < max) for min, max, _ in mappings
         ]
@@ -944,12 +944,12 @@ class Grid:
     def set_nan(self, value: Operand, fallback: Optional[Operand] = None):
         return self.replace(value, np.nan, fallback)
 
-    def value(self, x: float, y: float) -> Value:
+    def value(self, x: float, y: float) -> float:
         xoff = (x - self.xmin) / self.transform.a
         yoff = (y - self.ymax) / self.transform.e
         if xoff < 0 or xoff >= self.width or yoff < 0 or yoff >= self.height:
-            return np.nan
-        return self.data[int(yoff), int(xoff)]
+            return float(np.nan)
+        return float(self.data[int(yoff), int(xoff)])
 
     def data_extent(self):
         xmin, ymin, xmax, ymax = None, None, None, None
@@ -981,18 +981,19 @@ class Grid:
                     yield Point(
                         self.xmin + (x + 0.5) * self.cell_size.x,
                         self.ymax - (y + 0.5) * self.cell_size.y,
-                        value,
+                        float(value),
                     )
 
-    def to_polygons(self) -> Iterable[Tuple[Polygon, Value]]:
+    def to_polygons(self) -> Iterable[Tuple[Polygon, float]]:
         for shape, value in features.shapes(
             self.data, mask=np.isfinite(self.data), transform=self.transform
         ):
-            coordinates = shape["coordinates"]
-            yield Polygon(coordinates[0], coordinates[1:]), value
+            if np.isfinite(value):
+                coordinates = shape["coordinates"]
+                yield Polygon(coordinates[0], coordinates[1:]), float(value)
 
     def from_polygons(
-        self, polygons: Iterable[Tuple[Polygon, Value]], all_touched: bool = False
+        self, polygons: Iterable[Tuple[Polygon, float]], all_touched: bool = False
     ):
         array = features.rasterize(
             shapes=polygons,
@@ -1019,7 +1020,7 @@ class Grid:
             scaler = QuantileTransformer(n_quantiles=10)
         return self.local(lambda a: scaler.fit_transform(a, **fit_params))
 
-    def stretch(self, min_value: Value, max_value: Value):
+    def stretch(self, min_value: float, max_value: float):
         expected_range = max_value - min_value
         actual_range = self.max - self.min
 
@@ -1431,7 +1432,7 @@ def create(
 
 def interpolate(
     interpolator_factory: Callable[[ndarray, ndarray], Any],
-    points: Iterable[Tuple[float, float, Value]],
+    points: Iterable[Tuple[float, float, float]],
     epsg: Union[int, CRS],
     cell_size: Union[Tuple[float, float], float],
 ):
@@ -1458,7 +1459,7 @@ def interpolate(
 
 
 def interp_linear(
-    points: Iterable[Tuple[float, float, Value]],
+    points: Iterable[Tuple[float, float, float]],
     epsg: Union[int, CRS],
     cell_size: Union[Tuple[float, float], float],
     fill_value: float = np.nan,
@@ -1471,7 +1472,7 @@ def interp_linear(
 
 
 def interp_nearest(
-    points: Iterable[Tuple[float, float, Value]],
+    points: Iterable[Tuple[float, float, float]],
     epsg: Union[int, CRS],
     cell_size: Union[Tuple[float, float], float],
     rescale: bool = False,
@@ -1484,7 +1485,7 @@ def interp_nearest(
 
 
 def interp_rbf(
-    points: Iterable[Tuple[float, float, Value]],
+    points: Iterable[Tuple[float, float, float]],
     epsg: Union[int, CRS],
     cell_size: Union[Tuple[float, float], float],
     neighbors: Optional[int] = None,
@@ -1501,11 +1502,11 @@ def interp_rbf(
     return interpolate(f, points, epsg, cell_size)
 
 
-def _nodata(dtype: str) -> Optional[Value]:
+def _nodata(dtype: str) -> Union[float, int, None]:
     if dtype == "bool":
         return None
     if dtype.startswith("float"):
-        return np.finfo(dtype).min  # type: ignore
+        return float(np.finfo(dtype).min)
     if dtype.startswith("uint"):
         return np.iinfo(dtype).max
     return np.iinfo(dtype).min
