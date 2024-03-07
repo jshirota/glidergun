@@ -1100,9 +1100,8 @@ class Grid:
     def save(self, file, dtype: Optional[DataType] = None, driver: str = ""):
         grid = self * 1 if self.dtype == "bool" else self
 
-        if (
-            isinstance(file, str)
-            and file.lower().endswith(".gif")
+        if isinstance(file, str) and (
+            file.lower().endswith(".gif")
             or file.lower().endswith(".jpg")
             or file.lower().endswith(".png")
         ):

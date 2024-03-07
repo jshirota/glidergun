@@ -282,10 +282,8 @@ class Stack:
     ) -> None: ...
 
     def save(self, file, dtype: Optional[DataType] = None, driver: str = ""):
-        if (
-            isinstance(file, str)
-            and file.lower().endswith(".jpg")
-            or file.lower().endswith(".png")
+        if isinstance(file, str) and (
+            file.lower().endswith(".jpg") or file.lower().endswith(".png")
         ):
             grids = self.percent_clip_to_uint8_range().grids
             dtype = "uint8"
