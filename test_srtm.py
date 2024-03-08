@@ -54,6 +54,11 @@ def test_hillshade():
     assert g.md5 == "b947266de9fd27237405a34093ae513a"
 
 
+def test_focal_mean():
+    g = dem.focal_mean()
+    assert g.md5 == "ed6fb3c2c2423caeb347ba02196d78a7"
+
+
 def test_gosper():
     def tick(grid: Grid):
         g = grid.focal_sum() - grid
@@ -132,6 +137,13 @@ def test_to_points():
     assert n > 1000
 
 
+def test_to_stack():
+    s = dem.to_stack("gist_ncar")
+    for g in s.grids:
+        assert pytest.approx(g.min, 0.001) == 1
+        assert pytest.approx(g.max, 0.001) == 254
+
+
 def test_percent_clip_to_uint8_range():
     g1 = (dem * 100).percent_clip_to_uint8_range()
     assert pytest.approx(g1.min, 0.001) == 1
@@ -180,6 +192,18 @@ def test_trig():
     assert pytest.approx(g3.max, 0.001) == 225.951
 
 
+def save(g1: Grid, file: str, strict: bool = True):
+    folder = ".output/test"
+    file_path = f"{folder}/{file}"
+    os.makedirs(folder, exist_ok=True)
+    g1.save(file_path)
+    g2 = grid(file_path)
+    if strict:
+        assert g2.md5 == g1.md5
+    assert g2.extent == g1.extent
+    shutil.rmtree(folder)
+
+
 def test_save():
     memory_file = rasterio.MemoryFile()
     dem.save(memory_file)
@@ -187,33 +211,21 @@ def test_save():
     assert g.md5 == dem.md5
 
 
-def save(file: str, strict: bool = True):
-    folder = ".output/test"
-    file_path = f"{folder}/{file}"
-    os.makedirs(folder, exist_ok=True)
-    dem.save(file_path)
-    g = grid(file_path)
-    if strict:
-        assert g.md5 == dem.md5
-    assert g.extent == dem.extent
-    shutil.rmtree(folder)
-
-
 def test_save_2():
-    save("test_save_2.bil")
+    save(dem, "test_grid.bil")
 
 
 def test_save_3():
-    save("test_save_2.img")
+    save(dem, "test_grid.img")
 
 
 def test_save_4():
-    save("test_save_2.tif")
+    save(dem, "test_grid.tif")
 
 
 def test_save_5():
-    save("test_save_2.jpg", strict=False)
+    save(dem, "test_grid.jpg", strict=False)
 
 
 def test_save_6():
-    save("test_save_2.png", strict=False)
+    save(dem, "test_grid.png", strict=False)

@@ -234,7 +234,7 @@ class Grid:
 
     @property
     def md5(self) -> str:
-        return self._get("_md5", lambda: hashlib.md5(self.data).hexdigest())  # type: ignore
+        return self._get("_md5", lambda: hashlib.md5(self.data.copy(order="C")).hexdigest())  # type: ignore
 
     def _get(self, name: str, func: Callable):
         if not hasattr(self, name):
