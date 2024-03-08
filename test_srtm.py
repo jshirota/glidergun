@@ -132,6 +132,15 @@ def test_to_points():
     assert n > 1000
 
 
+def test_percent_clip_to_uint8_range():
+    g1 = (dem * 100).percent_clip_to_uint8_range()
+    assert pytest.approx(g1.min, 0.001) == 1
+    assert pytest.approx(g1.max, 0.001) == 254
+    g2 = ((dem.randomize() - 0.5) * 10000).percent_clip_to_uint8_range()
+    assert pytest.approx(g2.min, 0.001) == 1
+    assert pytest.approx(g2.max, 0.001) == 254
+
+
 def test_project():
     g = dem.project(3857)
     assert g.crs.wkt.startswith('PROJCS["WGS 84 / Pseudo-Mercator",')
