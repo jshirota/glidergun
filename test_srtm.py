@@ -9,7 +9,7 @@ dem = grid("./.data/n55_e008_1arc_v3.bil")
 
 def test_aspect():
     g = dem.aspect()
-    assert g.md5 == "398fd901ffdf84ef51ae50474e3420e4"
+    assert g.round(4).md5 == "e203f3540ab892ab9c69b386af1b47e9"
 
 
 def test_boolean():
@@ -50,8 +50,8 @@ def test_fill_nan():
 
 
 def test_hillshade():
-    g = dem.hillshade()
-    assert g.md5 == "b947266de9fd27237405a34093ae513a"
+    g = dem.hillshade().round(4)
+    assert g.round(4).md5 == "47cc9804d9ecf54cc00de876cf22fc74"
 
 
 def test_focal_mean():
@@ -177,7 +177,7 @@ def test_resample_2():
 
 def test_slope():
     g = dem.slope()
-    assert g.md5 == "6d7d0bdf8a2b38035b6fbc9d9c5cbd63"
+    assert g.round(4).md5 == "4604605be36bfbf1ca83e7ab21002a10"
 
 
 def test_trig():
@@ -190,6 +190,17 @@ def test_trig():
     g3 = dem.tan()
     assert pytest.approx(g3.min, 0.001) == -225.951
     assert pytest.approx(g3.max, 0.001) == 225.951
+
+
+def test_round():
+    g = dem.resample(0.01).randomize()
+    points = g.to_points()
+
+    for p1, p2 in zip(points, g.round().to_points()):
+        assert pytest.approx(p2[2], 0.000001) == round(p1[2])
+
+    for p1, p2 in zip(points, g.round(3).to_points()):
+        assert pytest.approx(p2[2], 0.000001) == round(p1[2], 3)
 
 
 def save(g1: Grid, file: str, strict: bool = True):
