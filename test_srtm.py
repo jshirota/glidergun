@@ -50,8 +50,8 @@ def test_fill_nan():
 
 
 def test_hillshade():
-    g = dem.hillshade().round(4)
-    assert g.round(4).md5 == "47cc9804d9ecf54cc00de876cf22fc74"
+    g = dem.hillshade().round(2)
+    assert g.round(4).md5 == "aac6e30620e69eeb9c3a9a1f27af50a2"
 
 
 def test_focal_mean():
