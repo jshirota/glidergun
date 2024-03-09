@@ -2,7 +2,7 @@ import os
 import pytest
 import rasterio
 import shutil
-from glidergun import *
+from glidergun import Stack, stack
 
 landsat = stack(
     ".data/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B1.TIF",

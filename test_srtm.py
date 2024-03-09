@@ -2,7 +2,7 @@ import os
 import pytest
 import rasterio
 import shutil
-from glidergun import *
+from glidergun import Grid, con, grid, mosaic
 
 dem = grid("./.data/n55_e008_1arc_v3.bil")
 
