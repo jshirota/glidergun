@@ -1,8 +1,9 @@
+import numpy as np
 import os
 import pytest
 import rasterio
 import shutil
-from glidergun import Grid, con, grid, mosaic
+from glidergun import Grid, con, grid, interp_linear, interp_nearest, interp_rbf, mosaic
 
 dem = grid("./.data/n55_e008_1arc_v3.bil")
 
@@ -49,14 +50,17 @@ def test_fill_nan():
     assert not g2.has_nan
 
 
-def test_hillshade():
-    g = dem.hillshade()
-    assert g.round().md5 == "c8e3c319fe198b0d87456b98b9fe7532"
-
-
 def test_focal_mean():
     g = dem.focal_mean()
     assert g.md5 == "ed6fb3c2c2423caeb347ba02196d78a7"
+
+
+def test_from_polygons():
+    g1 = dem.set_nan(-1 < dem < 10, 123.456)
+    g2 = dem.from_polygons(g1.to_polygons())
+    assert g2.has_nan
+    assert pytest.approx(g2.min, 0.001) == 123.456
+    assert pytest.approx(g2.max, 0.001) == 123.456
 
 
 def test_gosper():
@@ -70,6 +74,41 @@ def test_gosper():
         md5s.add(gosper.md5)
         gosper = tick(gosper)
     assert len(md5s) == 60
+
+
+def test_hillshade():
+    g = dem.hillshade()
+    assert g.round().md5 == "c8e3c319fe198b0d87456b98b9fe7532"
+
+
+def test_interp_linear():
+    g = interp_linear(
+        [(-120, 50, 100), (-110, 50, 200), (-110, 40, 300), (-120, 40, 400)],
+        dem.crs,
+        1.0,
+    )
+    assert g.value(-100, 45) is np.nan
+    assert g.value(-115, 45) == 300
+
+
+def test_interp_nearest():
+    g = interp_nearest(
+        [(-120, 50, 100), (-110, 50, 200), (-110, 40, 300), (-120, 40, 400)],
+        dem.crs,
+        1.0,
+    )
+    assert g.value(-100, 45) is np.nan
+    assert g.value(-115, 45) == 300
+
+
+def test_interp_rbf():
+    g = interp_rbf(
+        [(-120, 50, 100), (-110, 50, 200), (-110, 40, 300), (-120, 40, 400)],
+        dem.crs,
+        1.0,
+    )
+    assert g.value(-100, 45) is np.nan
+    assert 100 < g.value(-115, 45) < 400
 
 
 def test_mosaic():
