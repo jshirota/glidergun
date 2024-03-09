@@ -50,6 +50,13 @@ def test_operators_4():
         assert pytest.approx(g2.max, 0.001) == g1.max - 1000
 
 
+def test_percent_clip():
+    s = landsat.percent_clip(1, 99)
+    for g1, g2 in zip(landsat.grids, s.grids):
+        assert pytest.approx(g2.min, 0.001) == g1.percentile(1)
+        assert pytest.approx(g2.max, 0.001) == g1.percentile(99)
+
+
 def test_percent_clip_to_uint8_range():
     s = landsat.percent_clip_to_uint8_range()
     for g in s.grids:
