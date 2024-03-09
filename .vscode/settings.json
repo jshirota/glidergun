@@ -3,6 +3,6 @@
         "--max-line-length=120",
         "--ignore=E704,F403,F405,I001,I005,W503"
     ],
-    "python.testing.pytestEnabled": true,
-    "python.analysis.typeCheckingMode": "basic"
+    "python.analysis.typeCheckingMode": "basic",
+    "python.testing.pytestEnabled": true
 }
