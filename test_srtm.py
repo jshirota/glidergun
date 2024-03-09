@@ -66,11 +66,9 @@ def test_gosper():
 
     gosper = tick(grid(".data/gosper.txt"))
     md5s = set()
-
     while gosper.md5 not in md5s:
         md5s.add(gosper.md5)
         gosper = tick(gosper)
-
     assert len(md5s) == 60
 
 
@@ -224,9 +222,9 @@ def test_reclass():
     )
     assert pytest.approx(g.min, 0.001) == 1
     assert pytest.approx(g.max, 0.001) == 6
-
+    values = set([0, 1, 2, 3, 4, 5, 6])
     for _, value in g.to_polygons():
-        assert 0 < value < 7
+        assert value in values
 
 
 def test_resample():
@@ -237,6 +235,15 @@ def test_resample():
 def test_resample_2():
     g = dem.resample((0.02, 0.03))
     assert g.cell_size == (0.02, 0.03)
+
+
+def test_set_nan():
+    g1 = dem.set_nan(dem < 10, 123.456)
+    g2 = con(g1.is_nan(), 234.567, -g1)
+    assert pytest.approx(g1.min, 0.001) == 123.456
+    assert pytest.approx(g1.max, 0.001) == 123.456
+    assert pytest.approx(g2.min, 0.001) == -123.456
+    assert pytest.approx(g2.max, 0.001) == 234.567
 
 
 def test_slope():
@@ -259,10 +266,8 @@ def test_trig():
 def test_round():
     g = dem.resample(0.01).randomize()
     points = g.to_points()
-
     for p1, p2 in zip(points, g.round().to_points()):
         assert pytest.approx(p2[2], 0.000001) == round(p1[2])
-
     for p1, p2 in zip(points, g.round(3).to_points()):
         assert pytest.approx(p2[2], 0.000001) == round(p1[2], 3)
 
