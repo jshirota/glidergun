@@ -73,6 +73,20 @@ def test_properties():
     assert landsat.dtype == "float32"
 
 
+def test_properties_2():
+    for g in landsat.grids:
+        assert g.cell_size == landsat.cell_size
+        assert g.crs == landsat.crs
+        assert g.extent == landsat.extent
+        assert g.width == landsat.width
+        assert g.height == landsat.height
+        assert g.dtype == landsat.dtype
+        assert g.xmin == landsat.xmin
+        assert g.ymin == landsat.ymin
+        assert g.xmax == landsat.xmax
+        assert g.ymax == landsat.ymax
+
+
 def test_resample():
     s = landsat.resample(1000)
     assert pytest.approx(s.cell_size.x, 0.001) == 1000
