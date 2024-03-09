@@ -132,6 +132,42 @@ def test_operators_7():
     assert pytest.approx(g2.max, 0.001) == 2
 
 
+def test_operators_8():
+    g = dem // 100
+    assert pytest.approx(g.min, 0.001) == dem.min // 100
+    assert pytest.approx(g.max, 0.001) == dem.max // 100
+    assert g.md5 == "ee1906003e3b983d57f95ea60a059501"
+
+
+def test_operators_9():
+    g = -dem
+    assert pytest.approx(g.min, 0.001) == -dem.max
+    assert pytest.approx(g.max, 0.001) == -dem.min
+    assert g.md5 == "1183b549226dd2858bcf1d62dd5202d1"
+
+
+def test_operators_10():
+    g1 = con(dem > 0, dem, 0) ** 2
+    g2 = con(dem < 0, dem, 0) ** 2
+    assert pytest.approx(g1.min, 0.001) == 0
+    assert pytest.approx(g1.max, 0.001) == dem.max**2
+    assert pytest.approx(g2.min, 0.001) == 0
+    assert pytest.approx(g2.max, 0.001) == dem.min**2
+    assert g1.md5 == "0c960de0b43e7b02e743303567f96ce5"
+    assert g2.md5 == "10c9394f2b483d07834cdd6e8e9d7604"
+
+
+def test_operators_11():
+    g1 = dem == dem
+    g2 = dem == dem * 1
+    assert pytest.approx(g1.min, 0.001) == 1
+    assert pytest.approx(g1.max, 0.001) == 1
+    assert pytest.approx(g2.min, 0.001) == 1
+    assert pytest.approx(g2.max, 0.001) == 1
+    assert g1.md5 == "d698aba6245e1475c46436f1bb52f46e"
+    assert g2.md5 == "d698aba6245e1475c46436f1bb52f46e"
+
+
 def test_to_points():
     g = (dem.resample(0.01).randomize() < 0.01).set_nan(0).randomize()
     n = 0
