@@ -89,24 +89,28 @@ def test_operators():
     g = dem * 100
     assert pytest.approx(g.min, 0.001) == dem.min * 100
     assert pytest.approx(g.max, 0.001) == dem.max * 100
+    assert g.md5 == "7d8dc93fa345e9929ebebe630f2e1de3"
 
 
 def test_operators_2():
     g = dem / 100
     assert pytest.approx(g.min, 0.001) == dem.min / 100
     assert pytest.approx(g.max, 0.001) == dem.max / 100
+    assert g.md5 == "76f6a23611dbb51577003a6b4d157875"
 
 
 def test_operators_3():
     g = dem + 100
     assert pytest.approx(g.min, 0.001) == dem.min + 100
     assert pytest.approx(g.max, 0.001) == dem.max + 100
+    assert g.md5 == "7307a641931470f902b299e1b4271ee4"
 
 
 def test_operators_4():
     g = dem - 100
     assert pytest.approx(g.min, 0.001) == dem.min - 100
     assert pytest.approx(g.max, 0.001) == dem.max - 100
+    assert g.md5 == "78cc4e4f5256715c1d37b0a7c0f54312"
 
 
 def test_operators_5():
@@ -163,6 +167,30 @@ def test_properties():
     assert dem.height == 3601
     assert dem.dtype == "float32"
     assert dem.md5 == "09b41b3363bd79a87f28e3c5c4716724"
+
+
+def test_ptp():
+    g1 = dem.focal_ptp(4, True)
+    g2 = dem.focal_max(4, True) - dem.focal_min(4, True)
+    g3 = g2 - g1
+    assert pytest.approx(g3.min, 0.001) == 0
+    assert pytest.approx(g3.max, 0.001) == 0
+
+
+def test_reclass():
+    g = dem.reclass(
+        (-9999, 10, 1),
+        (10, 20, 2),
+        (20, 20, 3),
+        (30, 20, 4),
+        (40, 20, 5),
+        (50, 9999, 6),
+    )
+    assert pytest.approx(g.min, 0.001) == 1
+    assert pytest.approx(g.max, 0.001) == 6
+
+    for _, value in g.to_polygons():
+        assert 0 < value < 7
 
 
 def test_resample():
