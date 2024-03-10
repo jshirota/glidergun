@@ -1058,11 +1058,14 @@ class Grid:
 
         return (self - self.min) * expected_range / actual_range + min_value
 
-    def cap_min(self, value: Operand):
-        return con(self < value, value, self)
+    def cap_range(self, min: Operand, max: Operand, set_nan: bool = False):
+        return self.cap_min(min, set_nan).cap_max(max, set_nan)
 
-    def cap_max(self, value: Operand):
-        return con(self > value, value, self)
+    def cap_min(self, value: Operand, set_nan: bool = False):
+        return con(self < value, np.nan if set_nan else value, self)
+
+    def cap_max(self, value: Operand, set_nan: bool = False):
+        return con(self > value, np.nan if set_nan else value, self)
 
     def percent_clip(self, min_percent: float, max_percent: float):
         min_value = self.percentile(min_percent)
@@ -1071,7 +1074,7 @@ class Grid:
         if min_value == max_value:
             return self
 
-        return self.cap_min(min_value).cap_max(max_value)
+        return self.cap_range(min_value, max_value)
 
     def percent_clip_to_uint8_range(self):
         if self.dtype == "bool" or self.min > 0 and self.max < 255:
@@ -1080,6 +1083,9 @@ class Grid:
 
     def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
         return GridEstimator(model).fit(self, *explanatory_grids)
+
+    def hist(self):
+        return plt.bar(list(self.bins.keys()), list(self.bins.values()))
 
     def plot(self, cmap: Union[ColorMap, Any]):
         return dataclasses.replace(self, _cmap=cmap)
