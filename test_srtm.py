@@ -22,6 +22,15 @@ def test_boolean():
     assert pytest.approx(g4.max, 0.001) == 0
 
 
+def test_buffer():
+    g1 = (dem.buffer(12, 1) == 12) ^ (dem.buffer(12, 1) == 12)
+    g2 = (dem.buffer(12, 4) == 12) ^ (dem.buffer(12, 3) == 12)
+    assert pytest.approx(g1.min, 0.001) == 0
+    assert pytest.approx(g1.max, 0.001) == 0
+    assert pytest.approx(g2.min, 0.001) == 0
+    assert pytest.approx(g2.max, 0.001) == 1
+
+
 def test_clip():
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin + 0.02, ymin + 0.03, xmax - 0.04, ymax - 0.05
