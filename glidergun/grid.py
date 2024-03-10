@@ -1084,8 +1084,8 @@ class Grid:
     def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
         return GridEstimator(model).fit(self, *explanatory_grids)
 
-    def hist(self):
-        return plt.bar(list(self.bins.keys()), list(self.bins.values()))
+    def hist(self, **kwargs):
+        return plt.bar(list(self.bins.keys()), list(self.bins.values()), **kwargs)
 
     def plot(self, cmap: Union[ColorMap, Any]):
         return dataclasses.replace(self, _cmap=cmap)
