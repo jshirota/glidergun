@@ -947,6 +947,20 @@ class Grid:
         values = [value for _, _, value in mappings]
         return self._create(np.select(conditions, values, np.nan))
 
+    def slice(self, count: int, percent_clip: float = 0.1):
+        min = self.percentile(percent_clip)
+        max = self.percentile(100 - percent_clip)
+        interval = (max - min) / count
+        mappings = [
+            (
+                min + (i - 1) * interval if i > 1 else float("-inf"),
+                min + i * interval if i < count else float("inf"),
+                float(i),
+            )
+            for i in range(1, count + 1)
+        ]
+        return self.reclass(*mappings)
+
     def fill_nan(self, max_exponent: int = 4):
         if not self.has_nan:
             return self
@@ -1058,11 +1072,14 @@ class Grid:
 
         return (self - self.min) * expected_range / actual_range + min_value
 
-    def cap_min(self, value: Operand):
-        return con(self < value, value, self)
+    def cap_range(self, min: Operand, max: Operand, set_nan: bool = False):
+        return self.cap_min(min, set_nan).cap_max(max, set_nan)
 
-    def cap_max(self, value: Operand):
-        return con(self > value, value, self)
+    def cap_min(self, value: Operand, set_nan: bool = False):
+        return con(self < value, np.nan if set_nan else value, self)
+
+    def cap_max(self, value: Operand, set_nan: bool = False):
+        return con(self > value, np.nan if set_nan else value, self)
 
     def percent_clip(self, min_percent: float, max_percent: float):
         min_value = self.percentile(min_percent)
@@ -1071,7 +1088,7 @@ class Grid:
         if min_value == max_value:
             return self
 
-        return self.cap_min(min_value).cap_max(max_value)
+        return self.cap_range(min_value, max_value)
 
     def percent_clip_to_uint8_range(self):
         if self.dtype == "bool" or self.min > 0 and self.max < 255:
@@ -1080,6 +1097,10 @@ class Grid:
 
     def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
         return GridEstimator(model).fit(self, *explanatory_grids)
+
+    def hist(self, count: int = 100, percent_clip: float = 0.1, **kwargs):
+        grid = self.slice(count, percent_clip)
+        return plt.bar(list(grid.bins.keys()), list(grid.bins.values()), **kwargs)
 
     def plot(self, cmap: Union[ColorMap, Any]):
         return dataclasses.replace(self, _cmap=cmap)
