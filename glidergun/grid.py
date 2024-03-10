@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
+    Dict,
     Generic,
     Iterable,
     List,
@@ -88,11 +89,6 @@ class Point(NamedTuple):
     x: float
     y: float
     value: float
-
-
-class Bin(NamedTuple):
-    value: float
-    count: int
 
 
 class Estimator(Protocol):
@@ -238,10 +234,10 @@ class Grid:
         return CellSize(self.transform.a, -self.transform.e)
 
     @property
-    def bins(self) -> List[Bin]:
+    def bins(self) -> Dict[float, int]:
         def f():
             unique, counts = zip(np.unique(self.data, return_counts=True))
-            return sorted(zip(unique[0], counts[0]))
+            return dict(sorted(zip(map(float, unique[0]), map(int, counts[0]))))
 
         return self._get("_bins", f)
 
