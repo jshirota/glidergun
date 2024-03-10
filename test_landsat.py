@@ -54,28 +54,28 @@ def test_fit_decision_tree():
     fit(DecisionTreeRegressor())
 
 
-def test_operators():
+def test_op_mul():
     s = landsat * 1000
     for g1, g2 in zip(landsat.grids, s.grids):
         assert pytest.approx(g2.min, 0.001) == g1.min * 1000
         assert pytest.approx(g2.max, 0.001) == g1.max * 1000
 
 
-def test_operators_2():
+def test_op_div():
     s = landsat / 1000
     for g1, g2 in zip(landsat.grids, s.grids):
         assert pytest.approx(g2.min, 0.001) == g1.min / 1000
         assert pytest.approx(g2.max, 0.001) == g1.max / 1000
 
 
-def test_operators_3():
+def test_op_add():
     s = landsat + 1000
     for g1, g2 in zip(landsat.grids, s.grids):
         assert pytest.approx(g2.min, 0.001) == g1.min + 1000
         assert pytest.approx(g2.max, 0.001) == g1.max + 1000
 
 
-def test_operators_4():
+def test_op_sub():
     s = landsat - 1000
     for g1, g2 in zip(landsat.grids, s.grids):
         assert pytest.approx(g2.min, 0.001) == g1.min - 1000
@@ -156,24 +156,24 @@ def save(s1: Stack, file: str, strict: bool = True):
     shutil.rmtree(folder)
 
 
-def test_save():
+def test_save_memory():
     memory_file = rasterio.MemoryFile()
     landsat.save(memory_file)
     s = stack(memory_file)
     assert s.md5s == landsat.md5s
 
 
-def test_save_2():
+def test_save_img():
     save(landsat, "test_stack.img")
 
 
-def test_save_3():
+def test_save_tif():
     save(landsat, "test_stack.tif")
 
 
-def test_save_4():
+def test_save_jpg():
     save(landsat.extract_bands(4, 3, 2), "test_stack.jpg", strict=False)
 
 
-def test_save_5():
+def test_save_png():
     save(landsat.extract_bands(4, 3, 2), "test_stack.png", strict=False)

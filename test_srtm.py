@@ -157,68 +157,68 @@ def test_mosaic():
     assert pytest.approx(ymax, 0.001) == max(dem.ymax, g1.ymax)
 
 
-def test_operators():
+def test_op_mul():
     g = dem * 100
     assert pytest.approx(g.min, 0.001) == dem.min * 100
     assert pytest.approx(g.max, 0.001) == dem.max * 100
     assert g.md5 == "7d8dc93fa345e9929ebebe630f2e1de3"
 
 
-def test_operators_2():
+def test_op_div():
     g = dem / 100
     assert pytest.approx(g.min, 0.001) == dem.min / 100
     assert pytest.approx(g.max, 0.001) == dem.max / 100
     assert g.md5 == "76f6a23611dbb51577003a6b4d157875"
 
 
-def test_operators_3():
+def test_op_add():
     g = dem + 100
     assert pytest.approx(g.min, 0.001) == dem.min + 100
     assert pytest.approx(g.max, 0.001) == dem.max + 100
     assert g.md5 == "7307a641931470f902b299e1b4271ee4"
 
 
-def test_operators_4():
+def test_op_sub():
     g = dem - 100
     assert pytest.approx(g.min, 0.001) == dem.min - 100
     assert pytest.approx(g.max, 0.001) == dem.max - 100
     assert g.md5 == "78cc4e4f5256715c1d37b0a7c0f54312"
 
 
-def test_operators_5():
+def test_op_combined():
     g = 2 * dem - dem / 2 - dem / 4
     assert pytest.approx(g.min, 0.001) == 2 * dem.min - dem.min / 2 - dem.min / 4
     assert pytest.approx(g.max, 0.001) == 2 * dem.max - dem.max / 2 - dem.max / 4
 
 
-def test_operators_6():
+def test_op_pow():
     g = (-dem) ** 2 - dem**2
     assert pytest.approx(g.min, 0.001) == 0
     assert pytest.approx(g.max, 0.001) == 0
 
 
-def test_operators_7():
+def test_op_gt():
     g1 = con(dem > 20, 7, 11)
     g2 = g1 % 3
     assert pytest.approx(g2.min, 0.001) == 1
     assert pytest.approx(g2.max, 0.001) == 2
 
 
-def test_operators_8():
+def test_op__floordiv():
     g = dem // 100
     assert pytest.approx(g.min, 0.001) == dem.min // 100
     assert pytest.approx(g.max, 0.001) == dem.max // 100
     assert g.md5 == "ee1906003e3b983d57f95ea60a059501"
 
 
-def test_operators_9():
+def test_op_neg():
     g = -dem
     assert pytest.approx(g.min, 0.001) == -dem.max
     assert pytest.approx(g.max, 0.001) == -dem.min
     assert g.md5 == "1183b549226dd2858bcf1d62dd5202d1"
 
 
-def test_operators_10():
+def test_op_pow_2():
     g1 = con(dem > 0, dem, 0) ** 2
     g2 = con(dem < 0, dem, 0) ** 2
     assert pytest.approx(g1.min, 0.001) == 0
@@ -229,7 +229,7 @@ def test_operators_10():
     assert g2.md5 == "10c9394f2b483d07834cdd6e8e9d7604"
 
 
-def test_operators_11():
+def test_op_eq():
     g1 = dem == dem
     g2 = dem == dem * 1
     assert pytest.approx(g1.min, 0.001) == 1
@@ -325,16 +325,22 @@ def test_slope():
     assert g.round(4).md5 == "4604605be36bfbf1ca83e7ab21002a10"
 
 
-def test_trig():
-    g1 = dem.sin()
-    assert pytest.approx(g1.min, 0.001) == -1
-    assert pytest.approx(g1.max, 0.001) == 1
-    g2 = dem.cos()
-    assert pytest.approx(g2.min, 0.001) == -1
-    assert pytest.approx(g2.max, 0.001) == 1
-    g3 = dem.tan()
-    assert pytest.approx(g3.min, 0.001) == -225.951
-    assert pytest.approx(g3.max, 0.001) == 225.951
+def test_sin():
+    g = dem.sin()
+    assert pytest.approx(g.min, 0.001) == -1
+    assert pytest.approx(g.max, 0.001) == 1
+
+
+def test_cos():
+    g = dem.cos()
+    assert pytest.approx(g.min, 0.001) == -1
+    assert pytest.approx(g.max, 0.001) == 1
+
+
+def test_tan():
+    g = dem.tan()
+    assert pytest.approx(g.min, 0.001) == -225.951
+    assert pytest.approx(g.max, 0.001) == 225.951
 
 
 def test_round():
@@ -358,28 +364,28 @@ def save(g1: Grid, file: str, strict: bool = True):
     shutil.rmtree(folder)
 
 
-def test_save():
+def test_save_memory():
     memory_file = rasterio.MemoryFile()
     dem.save(memory_file)
     g = grid(memory_file)
     assert g.md5 == dem.md5
 
 
-def test_save_2():
+def test_save_bil():
     save(dem, "test_grid.bil")
 
 
-def test_save_3():
+def test_save_img():
     save(dem, "test_grid.img")
 
 
-def test_save_4():
+def test_save_tif():
     save(dem, "test_grid.tif")
 
 
-def test_save_5():
+def test_save_jpg():
     save(dem, "test_grid.jpg", strict=False)
 
 
-def test_save_6():
+def test_save_png():
     save(dem, "test_grid.png", strict=False)
