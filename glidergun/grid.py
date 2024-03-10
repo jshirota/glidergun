@@ -904,6 +904,12 @@ class Grid:
             return self
         return self._resample(self.extent, cell_size, resampling)
 
+    def buffer(self, value: Union[float, int], count: int):
+        grid = self
+        for _ in range(count):
+            grid = con(grid.focal_count(value, 1, True) > 0, value, grid)
+        return grid
+
     def randomize(self):
         return self._create(np.random.rand(self.height, self.width))
 
