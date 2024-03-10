@@ -433,6 +433,17 @@ class Grid:
     ) -> "Grid":
         return _batch(lambda g: _focal(func, buffer, circle, *g), buffer, self)[0]
 
+    def focal_count(
+        self,
+        value: Union[float, int],
+        buffer: int = 1,
+        circle: bool = False,
+        **kwargs,
+    ):
+        return self.focal(
+            lambda a: np.count_nonzero(a == value, axis=2, **kwargs), buffer, circle
+        )
+
     def focal_ptp(self, buffer: int = 1, circle: bool = False, **kwargs):
         return self.focal(lambda a: np.ptp(a, axis=2, **kwargs), buffer, circle)
 
@@ -724,6 +735,9 @@ class Grid:
             statistics = func(data[np.isfinite(data)])
             result = con(zone_grid == zone, statistics, result)  # type: ignore
         return result
+
+    def zonal_count(self, value: Union[float, int], zone_grid: "Grid", **kwargs):
+        return self.zonal(lambda a: np.count_nonzero(a == value, **kwargs), zone_grid)
 
     def zonal_ptp(self, zone_grid: "Grid", **kwargs):
         return self.zonal(lambda a: np.ptp(a, **kwargs), zone_grid)

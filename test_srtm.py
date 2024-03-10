@@ -50,6 +50,32 @@ def test_fill_nan():
     assert not g2.has_nan
 
 
+def test_focal_count():
+    g1 = dem.set_nan(dem < 5, con(dem > 50, 1, 2))
+    g2 = g1.focal_count(1)
+    g3 = g1.focal_count(2)
+    g4 = g1.focal_count(3)
+    assert pytest.approx(g2.min, 0.001) == 0
+    assert pytest.approx(g2.max, 0.001) == 9
+    assert pytest.approx(g3.min, 0.001) == 0
+    assert pytest.approx(g3.max, 0.001) == 9
+    assert pytest.approx(g4.min, 0.001) == 0
+    assert pytest.approx(g4.max, 0.001) == 0
+
+
+def test_focal_count_2():
+    g1 = dem.set_nan(dem < 5, con(dem > 50, 1, 2))
+    g2 = g1.focal_count(1, circle=True)
+    g3 = g1.focal_count(2, circle=True)
+    g4 = g1.focal_count(3, circle=True)
+    assert pytest.approx(g2.min, 0.001) == 0
+    assert pytest.approx(g2.max, 0.001) == 5
+    assert pytest.approx(g3.min, 0.001) == 0
+    assert pytest.approx(g3.max, 0.001) == 5
+    assert pytest.approx(g4.min, 0.001) == 0
+    assert pytest.approx(g4.max, 0.001) == 0
+
+
 def test_focal_mean():
     g = dem.focal_mean()
     assert g.md5 == "ed6fb3c2c2423caeb347ba02196d78a7"
