@@ -90,6 +90,11 @@ class Point(NamedTuple):
     value: float
 
 
+class Bin(NamedTuple):
+    value: float
+    count: int
+
+
 class Estimator(Protocol):
     fit: Callable
     score: Callable
@@ -231,6 +236,14 @@ class Grid:
     @property
     def cell_size(self) -> CellSize:
         return CellSize(self.transform.a, -self.transform.e)
+
+    @property
+    def bins(self) -> List[Bin]:
+        def f():
+            unique, counts = zip(np.unique(self.data, return_counts=True))
+            return sorted(zip(unique[0], counts[0]))
+
+        return self._get("_bins", f)
 
     @property
     def md5(self) -> str:
