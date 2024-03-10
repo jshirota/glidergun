@@ -33,6 +33,7 @@ pip install glidergun
 - min
 - max
 - cell_size
+- bins
 - md5
 
 ## local
@@ -59,6 +60,7 @@ pip install glidergun
 ## focal
 
 - focal (higher order)
+- focal_count
 - focal_mean
 - focal_std
 - focal_var
@@ -92,6 +94,7 @@ pip install glidergun
 ## zonal
 
 - zonal (higher order)
+- zonal_count
 - zonal_mean
 - zonal_std
 - zonal_var
@@ -139,12 +142,14 @@ pip install glidergun
 
 ## conversion, etc.
 
+- buffer
 - clip
 - con
 - fill_nan
 - from_polygons
 - mosaic
 - pca
+- percent_clip
 - project
 - randomize
 - reclass
