@@ -13,6 +13,20 @@ def test_aspect():
     assert g.round(4).md5 == "e203f3540ab892ab9c69b386af1b47e9"
 
 
+def test_bins():
+    n = 77
+    count = dem.bins.get(n, 0)
+    points = list(dem.set_nan(dem != n).to_points())
+    assert count == len(points)
+
+
+def test_bins_2():
+    n = 999
+    count = dem.bins.get(n, 0)
+    points = list(dem.set_nan(dem != n).to_points())
+    assert count == len(points)
+
+
 def test_boolean():
     g1 = dem > 20 and dem < 40
     g2 = 20 < dem < 40
