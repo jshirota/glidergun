@@ -1098,9 +1098,8 @@ class Grid:
     def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
         return GridEstimator(model).fit(self, *explanatory_grids)
 
-    def hist(self, count: int = 100, percent_clip: float = 0.1, **kwargs):
-        grid = self.slice(count, percent_clip)
-        return plt.bar(list(grid.bins.keys()), list(grid.bins.values()), **kwargs)
+    def hist(self, **kwargs):
+        return plt.bar(list(self.bins.keys()), list(self.bins.values()), **kwargs)
 
     def plot(self, cmap: Union[ColorMap, Any]):
         return dataclasses.replace(self, _cmap=cmap)
