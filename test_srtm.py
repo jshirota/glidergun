@@ -27,6 +27,11 @@ def test_bins_2():
     assert count == len(points)
 
 
+def test_bins_3():
+    assert len(dem.slice(7).bins) == 7
+    assert len(dem.set_nan(12).slice(7).bins) == 8
+
+
 def test_boolean():
     g1 = dem > 20 and dem < 40
     g2 = 20 < dem < 40
@@ -366,6 +371,21 @@ def test_round():
         assert pytest.approx(p2[2], 0.000001) == round(p1[2], 3)
 
 
+def test_zonal():
+    zones = dem.slice(10)
+    zone_min = dem.zonal_min(zones)
+    zone_max = dem.zonal_max(zones)
+    assert zone_min.set_nan(zones != 1).max < zone_max.set_nan(zones != 2).min
+    assert zone_min.set_nan(zones != 2).max < zone_max.set_nan(zones != 3).min
+    assert zone_min.set_nan(zones != 3).max < zone_max.set_nan(zones != 4).min
+    assert zone_min.set_nan(zones != 4).max < zone_max.set_nan(zones != 5).min
+    assert zone_min.set_nan(zones != 5).max < zone_max.set_nan(zones != 6).min
+    assert zone_min.set_nan(zones != 6).max < zone_max.set_nan(zones != 7).min
+    assert zone_min.set_nan(zones != 7).max < zone_max.set_nan(zones != 8).min
+    assert zone_min.set_nan(zones != 8).max < zone_max.set_nan(zones != 9).min
+    assert zone_min.set_nan(zones != 9).max < zone_max.set_nan(zones != 10).min
+
+
 def save(g1: Grid, file: str, strict: bool = True):
     folder = ".output/test"
     file_path = f"{folder}/{file}"
@@ -387,6 +407,10 @@ def test_save_memory():
 
 def test_save_bil():
     save(dem, "test_grid.bil")
+
+
+def test_save_bt():
+    save(dem, "test_grid.bt")
 
 
 def test_save_img():
