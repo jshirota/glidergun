@@ -1150,8 +1150,9 @@ class Grid:
         grid = self * 1 if self.dtype == "bool" else self
 
         if isinstance(file, str) and (
-            file.lower().endswith(".gif")
-            or file.lower().endswith(".jpg")
+            file.lower().endswith(".jpg")
+            or file.lower().endswith(".kml")
+            or file.lower().endswith(".kmz")
             or file.lower().endswith(".png")
         ):
             grid = grid.percent_clip_to_uint8_range()
