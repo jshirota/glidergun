@@ -302,11 +302,11 @@ def test_to_stack():
         assert pytest.approx(g.max, 0.001) == 254
 
 
-def test_percent_clip_to_uint8_range():
-    g1 = (dem * 100).percent_clip_to_uint8_range()
+def test_to_uint8_range():
+    g1 = (dem * 100).to_uint8_range()
     assert pytest.approx(g1.min, 0.001) == 1
     assert pytest.approx(g1.max, 0.001) == 254
-    g2 = ((dem.randomize() - 0.5) * 10000).percent_clip_to_uint8_range()
+    g2 = ((dem.randomize() - 0.5) * 10000).to_uint8_range()
     assert pytest.approx(g2.min, 0.001) == 1
     assert pytest.approx(g2.max, 0.001) == 254
 

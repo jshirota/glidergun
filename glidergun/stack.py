@@ -199,8 +199,8 @@ class Stack:
     def percent_clip(self, min_percent: float, max_percent: float):
         return self.each(lambda g: g.percent_clip(min_percent, max_percent))
 
-    def percent_clip_to_uint8_range(self):
-        return self.each(lambda g: g.percent_clip_to_uint8_range())
+    def to_uint8_range(self):
+        return self.each(lambda g: g.to_uint8_range())
 
     def plot(self, r: int, g: int, b: int):
         return dataclasses.replace(self, _rgb=(r, g, b))
@@ -288,7 +288,7 @@ class Stack:
             or file.lower().endswith(".kmz")
             or file.lower().endswith(".png")
         ):
-            grids = self.percent_clip_to_uint8_range().grids
+            grids = self.to_uint8_range().grids
             dtype = "uint8"
         else:
             grids = self.grids

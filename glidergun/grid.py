@@ -1090,7 +1090,7 @@ class Grid:
 
         return self.cap_range(min_value, max_value)
 
-    def percent_clip_to_uint8_range(self):
+    def to_uint8_range(self):
         if self.dtype == "bool" or self.min > 0 and self.max < 255:
             return self
         return self.percent_clip(0.1, 99.9).stretch(1, 254)
@@ -1155,7 +1155,7 @@ class Grid:
             or file.lower().endswith(".kmz")
             or file.lower().endswith(".png")
         ):
-            grid = grid.percent_clip_to_uint8_range()
+            grid = grid.to_uint8_range()
             dtype = "uint8"
         else:
             grid = grid
