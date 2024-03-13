@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+	<Document>
+		<name>srtm</name>
+		<description></description>
+		<styleUrl>#hideChildrenStyle</styleUrl>
+		<Style id="hideChildrenStyle">
+			<ListStyle id="hideChildren">
+				<listItemType>checkHideChildren</listItemType>
+			</ListStyle>
+		</Style>
+		<NetworkLink>
+			<open>1</open>
+			<Region>
+				<LatLonAltBox>
+					<north>56.000139</north>
+					<south>54.999861</south>
+					<east>10.000278</east>
+					<west>7.999722</west>
+				</LatLonAltBox>
+				<Lod>
+					<minLodPixels>112</minLodPixels>
+					<maxLodPixels>-1</maxLodPixels>
+				</Lod>
+			</Region>
+			<Link>
+				<href>0/0/0.kml</href>
+				<viewRefreshMode>onRegion</viewRefreshMode>
+			</Link>
+		</NetworkLink>
+	</Document>
+</kml>
