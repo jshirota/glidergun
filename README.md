@@ -157,7 +157,6 @@ pip install glidergun
 - resample
 - scale
 - set_nan
-- shrink
 - standardize
 - to_points
 - to_polygons

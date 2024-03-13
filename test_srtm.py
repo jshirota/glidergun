@@ -50,6 +50,33 @@ def test_buffer():
     assert pytest.approx(g2.max, 0.001) == 1
 
 
+def test_buffer_2():
+    g1 = dem.resample(0.01).slice(5)
+    g2 = g1.buffer(2, 1)
+    g3 = g1.buffer(2, 0)
+    g4 = g1.buffer(2, -1)
+    g5 = g1.set_nan(~g4.is_nan(), g1)
+    assert not g2.has_nan
+    assert g3.md5 == g1.md5
+    assert g4.has_nan
+    assert pytest.approx(g5.min, 0.001) == 2
+    assert pytest.approx(g5.max, 0.001) == 2
+
+
+def test_buffer_3():
+    g1 = dem.resample(0.01).slice(5)
+    g1 = (g1.randomize() < 0.95) * g1
+    g2 = g1.buffer(2, 1)
+    g3 = g1.buffer(2, 0)
+    g4 = g1.buffer(2, -1)
+    g5 = g1.set_nan(~g4.is_nan(), g1)
+    assert not g2.has_nan
+    assert g3.md5 == g1.md5
+    assert g4.has_nan
+    assert pytest.approx(g5.min, 0.001) == 2
+    assert pytest.approx(g5.max, 0.001) == 2
+
+
 def test_clip():
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin + 0.02, ymin + 0.03, xmax - 0.04, ymax - 0.05

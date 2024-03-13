@@ -914,6 +914,9 @@ class Grid:
         return self._resample(self.extent, cell_size, resampling)
 
     def buffer(self, value: Union[float, int], count: int):
+        if count < 0:
+            grid = (self != value).buffer(1, -count)
+            return con(grid == 0, value, self.set_nan(self == value))
         grid = self
         for _ in range(count):
             grid = con(grid.focal_count(value, 1, True) > 0, value, grid)
@@ -1013,9 +1016,6 @@ class Grid:
             xmax + self.cell_size.x / 2,
             ymax + self.cell_size.y / 2,
         )
-
-    def shrink(self):
-        return self.clip(self.data_extent())
 
     def to_points(self) -> Iterable[Point]:
         for y, row in enumerate(self.data):
