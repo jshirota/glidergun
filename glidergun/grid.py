@@ -442,6 +442,19 @@ class Grid:
     ) -> "Grid":
         return _batch(lambda g: _focal(func, buffer, circle, *g), buffer, self)[0]
 
+    def focal_python(
+        self,
+        func: Callable[[List[float]], float],
+        buffer: int = 1,
+        circle: bool = False,
+        ignore_nan: bool = True,
+    ) -> "Grid":
+        def f(a):
+            values = [n for n in a if n != np.nan] if ignore_nan else list(a)
+            return func(values)
+
+        return self.focal(lambda a: np.apply_along_axis(f, 2, a), buffer, circle)
+
     def focal_count(
         self,
         value: Union[float, int],

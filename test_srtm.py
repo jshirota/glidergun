@@ -136,6 +136,20 @@ def test_focal_mean():
     assert g.md5 == "ed6fb3c2c2423caeb347ba02196d78a7"
 
 
+def test_focal_mean_2():
+    g1 = dem.resample(0.02)
+    g2 = g1.focal_mean()
+    g3 = g1.focal_python(np.nanmean)
+    assert g2.md5 == g3.md5
+
+
+def test_focal_mean_3():
+    g1 = dem.resample(0.02)
+    g2 = g1.focal_mean(3, True, False)
+    g3 = g1.focal_python(np.mean, 3, True, False)
+    assert g2.md5 == g3.md5
+
+
 def test_from_polygons():
     g1 = dem.set_nan(-1 < dem < 10, 123.456)
     g2 = dem.from_polygons(g1.to_polygons())
