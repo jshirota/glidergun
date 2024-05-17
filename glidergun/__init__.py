@@ -5,8 +5,8 @@ import warnings
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
-import glidergun.ipython
-from glidergun.grid import (
+import glidergun._ipython
+from glidergun._grid import (
     Extent,
     Grid,
     con,
@@ -24,4 +24,4 @@ from glidergun.grid import (
     standardize,
     std,
 )
-from glidergun.stack import Stack, stack
+from glidergun._stack import Stack, stack

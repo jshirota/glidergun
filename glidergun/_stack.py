@@ -8,7 +8,7 @@ from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
 
-from glidergun.grid import (
+from glidergun._grid import (
     CellSize,
     Extent,
     Grid,
@@ -20,7 +20,7 @@ from glidergun.grid import (
     pca,
     standardize,
 )
-from glidergun.literals import DataType
+from glidergun._literals import DataType
 
 Operand = Union["Stack", Grid, float, int]
 
@@ -219,7 +219,7 @@ class Stack:
         grayscale: bool = True,
         **kwargs,
     ):
-        from glidergun.ipython import _map
+        from glidergun._ipython import _map
 
         return _map(
             self,

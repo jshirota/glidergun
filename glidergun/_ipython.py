@@ -6,8 +6,8 @@ import IPython
 import matplotlib.pyplot as plt
 import numpy as np
 
-from glidergun.grid import Grid
-from glidergun.stack import Stack
+from glidergun._grid import Grid
+from glidergun._stack import Stack
 
 
 def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
@@ -27,9 +27,11 @@ def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
             plt.imshow(obj.data, cmap=color)
 
         elif isinstance(obj, Stack):
-            rgb = [obj.grids[i - 1].data for i in (color if color else (1, 2, 3))]
+            rgb = [
+                obj.grids[i - 1].data for i in (color if color else (1, 2, 3))]
             alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
-            plt.imshow(np.dstack([*[np.asanyarray(g, "uint8") for g in rgb], alpha]))
+            plt.imshow(
+                np.dstack([*[np.asanyarray(g, "uint8") for g in rgb], alpha]))
 
         plt.savefig(buffer, bbox_inches="tight", pad_inches=0)
         plt.close(figure)
@@ -53,8 +55,13 @@ def _map(
     import jinja2
 
     obj = obj.project(4326)
+    obj_4326 = obj.clip((obj.xmin, max(obj.ymin, -80),
+                        obj.xmax, min(obj.ymax, 80)))
+    obj_3857 = obj_4326.project(3857)
+
     figure = folium.Figure(width=str(width), height=height)
-    bounds = [[obj.ymin, obj.xmin], [obj.ymax, obj.xmax]]
+    bounds = [[obj_4326.ymin, obj_4326.xmin],
+              [obj_4326.ymax, obj_4326.xmax]]
 
     if folium_map is None:
         if basemap:
@@ -81,7 +88,7 @@ def _map(
             )
 
     folium.raster_layers.ImageOverlay(  # type: ignore
-        image=_thumbnail(obj, color, (20, 20)),
+        image=_thumbnail(obj_3857, color, (20, 20)),
         bounds=bounds,
         opacity=opacity,
     ).add_to(folium_map)
@@ -103,7 +110,8 @@ if ipython:
             extent = obj.extent
         return f'<div>{description}</div><img src="{thumbnail}" /><div>{extent}</div>'
 
-    formatter = ipython.display_formatter.formatters["text/html"]  # type: ignore
+    # type: ignore
+    formatter = ipython.display_formatter.formatters["text/html"]
     formatter.for_type(Grid, html)
     formatter.for_type(Stack, html)
     formatter.for_type(

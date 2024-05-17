@@ -41,7 +41,7 @@ from shapely import Polygon
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
 
-from glidergun.literals import (
+from glidergun._literals import (
     ColorMap,
     DataType,
     ExtentResolution,
@@ -1062,7 +1062,7 @@ class Grid:
         return self._create(array)
 
     def to_stack(self, cmap: Union[ColorMap, Any]):
-        from glidergun.stack import stack
+        from glidergun._stack import stack
 
         grid1 = self - self.min
         grid2 = grid1 / grid1.max
@@ -1129,7 +1129,7 @@ class Grid:
         grayscale: bool = True,
         **kwargs,
     ):
-        from glidergun.ipython import _map
+        from glidergun._ipython import _map
 
         return _map(
             self,
