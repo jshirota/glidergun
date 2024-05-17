@@ -6,7 +6,7 @@ import IPython
 import matplotlib.pyplot as plt
 import numpy as np
 
-from glidergun._grid import Grid
+from glidergun._grid import Grid, Extent
 from glidergun._stack import Stack
 
 
@@ -54,9 +54,14 @@ def _map(
     import folium
     import jinja2
 
-    obj = obj.project(4326)
-    obj_4326 = obj.clip((obj.xmin, max(obj.ymin, -80),
-                        obj.xmax, min(obj.ymax, 80)))
+    obj_4326 = obj.project(4326)
+
+    extent = Extent(obj_4326.xmin, max(obj_4326.ymin, -80),
+                    obj_4326.xmax, min(obj_4326.ymax, 80))
+
+    if obj_4326.extent != extent:
+        obj_4326 = obj.clip(extent)
+
     obj_3857 = obj_4326.project(3857)
 
     figure = folium.Figure(width=str(width), height=height)
