@@ -249,7 +249,10 @@ class Stack:
     def project(
         self, epsg: Union[int, CRS], resampling: Resampling = Resampling.nearest
     ):
-        return self.each(lambda g: g.project(epsg, resampling))
+        crs = CRS.from_epsg(epsg) if isinstance(epsg, int) else epsg
+        if crs.wkt == self.crs.wkt:
+            return self
+        return self.each(lambda g: g.project(crs, resampling))
 
     def resample(
         self,

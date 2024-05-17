@@ -881,6 +881,8 @@ class Grid:
         resampling: Union[Resampling, ResamplingMethod] = "nearest",
     ) -> "Grid":
         crs = CRS.from_epsg(epsg) if isinstance(epsg, int) else epsg
+        if crs.wkt == self.crs.wkt:
+            return self
         transform, width, height = calculate_default_transform(
             self.crs, crs, self.width, self.height, *self.extent
         )

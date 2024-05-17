@@ -27,11 +27,9 @@ def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
             plt.imshow(obj.data, cmap=color)
 
         elif isinstance(obj, Stack):
-            rgb = [
-                obj.grids[i - 1].data for i in (color if color else (1, 2, 3))]
+            rgb = [obj.grids[i - 1].data for i in (color if color else (1, 2, 3))]
             alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
-            plt.imshow(
-                np.dstack([*[np.asanyarray(g, "uint8") for g in rgb], alpha]))
+            plt.imshow(np.dstack([*[np.asanyarray(g, "uint8") for g in rgb], alpha]))
 
         plt.savefig(buffer, bbox_inches="tight", pad_inches=0)
         plt.close(figure)
@@ -56,8 +54,9 @@ def _map(
 
     obj_4326 = obj.project(4326)
 
-    extent = Extent(obj_4326.xmin, max(obj_4326.ymin, -80),
-                    obj_4326.xmax, min(obj_4326.ymax, 80))
+    extent = Extent(
+        obj_4326.xmin, max(obj_4326.ymin, -85), obj_4326.xmax, min(obj_4326.ymax, 85)
+    )
 
     if obj_4326.extent != extent:
         obj_4326 = obj.clip(extent)
@@ -65,8 +64,7 @@ def _map(
     obj_3857 = obj_4326.project(3857)
 
     figure = folium.Figure(width=str(width), height=height)
-    bounds = [[obj_4326.ymin, obj_4326.xmin],
-              [obj_4326.ymax, obj_4326.xmax]]
+    bounds = [[obj_4326.ymin, obj_4326.xmin], [obj_4326.ymax, obj_4326.xmax]]
 
     if folium_map is None:
         if basemap:
@@ -115,8 +113,7 @@ if ipython:
             extent = obj.extent
         return f'<div>{description}</div><img src="{thumbnail}" /><div>{extent}</div>'
 
-    # type: ignore
-    formatter = ipython.display_formatter.formatters["text/html"]
+    formatter = ipython.display_formatter.formatters["text/html"]  # type: ignore
     formatter.for_type(Grid, html)
     formatter.for_type(Stack, html)
     formatter.for_type(
