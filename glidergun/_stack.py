@@ -207,9 +207,7 @@ class Stack:
 
     def map(
         self,
-        r: int,
-        g: int,
-        b: int,
+        rgb: Tuple[int, int, int] = (1, 2, 3),
         opacity: float = 1.0,
         folium_map=None,
         width: int = 800,
@@ -223,7 +221,7 @@ class Stack:
 
         return _map(
             self,
-            (r, g, b),
+            rgb,
             opacity,
             folium_map,
             width,
