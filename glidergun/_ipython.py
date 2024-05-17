@@ -6,7 +6,7 @@ import IPython
 import matplotlib.pyplot as plt
 import numpy as np
 
-from glidergun._grid import Grid, Extent
+from glidergun._grid import Extent, Grid
 from glidergun._stack import Stack
 
 
@@ -16,7 +16,7 @@ def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
         axes = figure.add_axes((0, 0, 1, 1))
         axes.axis("off")
 
-        n = 2000 / max(obj.width, obj.height)
+        n = 4000 / max(obj.width, obj.height)
 
         if n < 1:
             obj = obj.resample(obj.cell_size / n)
