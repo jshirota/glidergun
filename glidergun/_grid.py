@@ -1252,7 +1252,7 @@ def _create(data: ndarray, crs: CRS, transform: Affine):
         data = np.asanyarray(data, dtype="int32")
     elif data.dtype == "uint64":
         data = np.asanyarray(data, dtype="uint32")
-    return Grid(data, crs, transform)
+    return Grid(data, crs if crs else CRS.from_epsg(3857), transform)
 
 
 def _read(dataset, index):
@@ -1511,6 +1511,11 @@ def interpolate(
     values = np.array(value_array)
     x, y = coords.transpose(1, 0)
     xmin, ymin, xmax, ymax = x.min(), y.min(), x.max(), y.max()
+
+    x_buffer = (xmax - xmin) * 0.1
+    y_buffer = (ymax - ymin) * 0.1
+    xmin, ymin, xmax, ymax = xmin - x_buffer, ymin - y_buffer, xmax + x_buffer, ymax + y_buffer
+
     extent = Extent(xmin, ymin, xmax, ymax)
     grid = create(extent, epsg, cell_size)
     interp = interpolator_factory(coords, values)

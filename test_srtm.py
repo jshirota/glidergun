@@ -193,7 +193,7 @@ def test_interp_nearest():
         1.0,
     )
     assert g.value(-100, 45) is np.nan
-    assert g.value(-115, 45) == 300
+    assert g.value(-112, 42) == 300
 
 
 def test_interp_rbf():
