@@ -1,0 +1,12 @@
+build
+folium
+ipykernel
+ipython
+matplotlib
+numpy
+pytest
+rasterio
+scikit-learn
+scipy
+shapely
+twine

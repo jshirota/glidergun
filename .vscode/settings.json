@@ -4,5 +4,9 @@
         "--ignore=E704,F403,F405,I001,I005,W503"
     ],
     "python.analysis.typeCheckingMode": "basic",
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestArgs": [
+        "."
+    ],
+    "python.testing.unittestEnabled": false
 }
