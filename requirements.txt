@@ -1,12 +1,13 @@
-build
 folium
-ipykernel
 ipython
 matplotlib
 numpy
-pytest
 rasterio
 scikit-learn
 scipy
 shapely
+
+build
+ipykernel
+pytest
 twine
