@@ -247,8 +247,10 @@ def test_op_sub():
 
 def test_op_combined():
     g = 2 * dem - dem / 2 - dem / 4
-    assert pytest.approx(g.min, 0.001) == 2 * dem.min - dem.min / 2 - dem.min / 4
-    assert pytest.approx(g.max, 0.001) == 2 * dem.max - dem.max / 2 - dem.max / 4
+    assert pytest.approx(g.min, 0.001) == 2 * dem.min - \
+        dem.min / 2 - dem.min / 4
+    assert pytest.approx(g.max, 0.001) == 2 * dem.max - \
+        dem.max / 2 - dem.max / 4
 
 
 def test_op_pow():

@@ -117,7 +117,8 @@ class GridEstimator(Generic[T]):
     def score(self, dependent_grid: "Grid", *explanatory_grids: "Grid") -> float:
         head, *tail = self._flatten(dependent_grid, *explanatory_grids)
         return self.model.score(
-            np.array([g.data.ravel() for g in tail]).transpose(1, 0), head.data.ravel()
+            np.array([g.data.ravel() for g in tail]).transpose(
+                1, 0), head.data.ravel()
         )
 
     def predict(self, *explanatory_grids: "Grid") -> "Grid":
@@ -243,7 +244,7 @@ class Grid:
 
     @property
     def md5(self) -> str:
-        return self._get("_md5", lambda: hashlib.md5(self.data.copy(order="C")).hexdigest())  # type: ignore
+        return self._get("_md5", lambda: hashlib.md5(self.data.copy(order="C")).hexdigest())
 
     def _get(self, name: str, func: Callable):
         if not hasattr(self, name):
@@ -419,7 +420,8 @@ class Grid:
 
     def gaussian_gradient_magnitude(self, sigma: float, **kwargs):
         return self.local(
-            lambda a: sp.ndimage.gaussian_gradient_magnitude(a, sigma, **kwargs)
+            lambda a: sp.ndimage.gaussian_gradient_magnitude(
+                a, sigma, **kwargs)
         )
 
     def gaussian_laplace(self, sigma: float, **kwargs):
@@ -463,7 +465,8 @@ class Grid:
         **kwargs,
     ):
         return self.focal(
-            lambda a: np.count_nonzero(a == value, axis=2, **kwargs), buffer, circle
+            lambda a: np.count_nonzero(
+                a == value, axis=2, **kwargs), buffer, circle
         )
 
     def focal_ptp(self, buffer: int = 1, circle: bool = False, **kwargs):
@@ -600,7 +603,8 @@ class Grid:
         **kwargs,
     ):
         return self.focal(
-            lambda a: sp.stats.pmean(a, p, **self._kwargs(ignore_nan, **kwargs)),
+            lambda a: sp.stats.pmean(
+                a, p, **self._kwargs(ignore_nan, **kwargs)),
             buffer,
             circle,
         )
@@ -609,7 +613,8 @@ class Grid:
         self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
     ):
         return self.focal(
-            lambda a: sp.stats.kurtosis(a, **self._kwargs(ignore_nan, **kwargs)),
+            lambda a: sp.stats.kurtosis(
+                a, **self._kwargs(ignore_nan, **kwargs)),
             buffer,
             circle,
         )
@@ -665,7 +670,8 @@ class Grid:
         self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
     ):
         return self.focal(
-            lambda a: sp.stats.kstatvar(a, **self._kwargs(ignore_nan, **kwargs)),
+            lambda a: sp.stats.kstatvar(
+                a, **self._kwargs(ignore_nan, **kwargs)),
             buffer,
             circle,
         )
@@ -707,7 +713,8 @@ class Grid:
         self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
     ):
         return self.focal(
-            lambda a: sp.stats.variation(a, **self._kwargs(ignore_nan, **kwargs)),
+            lambda a: sp.stats.variation(
+                a, **self._kwargs(ignore_nan, **kwargs)),
             buffer,
             circle,
         )
@@ -867,7 +874,8 @@ class Grid:
             dst_crs=crs,
             dst_nodata=self.nodata,
             resampling=(
-                Resampling[resampling] if isinstance(resampling, str) else resampling
+                Resampling[resampling] if isinstance(
+                    resampling, str) else resampling
             ),
         )
         result = _create(destination, crs, transform)
@@ -891,7 +899,8 @@ class Grid:
             crs,
             width,
             height,
-            Resampling[resampling] if isinstance(resampling, str) else resampling,
+            Resampling[resampling] if isinstance(
+                resampling, str) else resampling,
         )
 
     def _resample(
@@ -1068,7 +1077,8 @@ class Grid:
 
         grid1 = self - self.min
         grid2 = grid1 / grid1.max
-        arrays = plt.get_cmap(cmap)(grid2.data).transpose(2, 0, 1)[:3]  # type: ignore
+        arrays = plt.get_cmap(cmap)(grid2.data).transpose(
+            2, 0, 1)[:3]
         mask = self.is_nan()
         r, g, b = [self._create(a * 253 + 1).set_nan(mask) for a in arrays]
         return stack(r, g, b)
@@ -1379,7 +1389,8 @@ def _batch(
 
 def con(grid: Grid, trueValue: Operand, falseValue: Operand):
     return grid.local(
-        lambda data: np.where(data, grid._data(trueValue), grid._data(falseValue))
+        lambda data: np.where(data, grid._data(
+            trueValue), grid._data(falseValue))
     )
 
 
@@ -1423,7 +1434,8 @@ def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
         PCA(n_components=n_components)
         .fit_transform(
             np.array(
-                [g.scale(StandardScaler()).data.ravel() for g in grids_adjusted]
+                [g.scale(StandardScaler()).data.ravel()
+                 for g in grids_adjusted]
             ).transpose((1, 0))
         )
         .transpose((1, 0))
@@ -1514,7 +1526,8 @@ def interpolate(
 
     x_buffer = (xmax - xmin) * 0.1
     y_buffer = (ymax - ymin) * 0.1
-    xmin, ymin, xmax, ymax = xmin - x_buffer, ymin - y_buffer, xmax + x_buffer, ymax + y_buffer
+    xmin, ymin, xmax, ymax = xmin - x_buffer, ymin - \
+        y_buffer, xmax + x_buffer, ymax + y_buffer
 
     extent = Extent(xmin, ymin, xmax, ymax)
     grid = create(extent, epsg, cell_size)
