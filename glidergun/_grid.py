@@ -1021,25 +1021,29 @@ class Grid:
             return float(np.nan)
         return float(self.data[int(yoff), int(xoff)])
 
+    @property
     def data_extent(self):
-        xmin, ymin, xmax, ymax = None, None, None, None
-        for x, y, _ in self.to_points():
-            if not xmin or x < xmin:
-                xmin = x
-            if not ymin or y < ymin:
-                ymin = y
-            if not xmax or x > xmax:
-                xmax = x
-            if not ymax or y > ymax:
-                ymax = y
-        if xmin is None or ymin is None or xmax is None or ymax is None:
-            raise ValueError("None of the cells has a value.")
-        return Extent(
-            xmin - self.cell_size.x / 2,
-            ymin - self.cell_size.y / 2,
-            xmax + self.cell_size.x / 2,
-            ymax + self.cell_size.y / 2,
-        )
+        def f(self):
+            xmin, ymin, xmax, ymax = None, None, None, None
+            for x, y, _ in self.to_points():
+                if not xmin or x < xmin:
+                    xmin = x
+                if not ymin or y < ymin:
+                    ymin = y
+                if not xmax or x > xmax:
+                    xmax = x
+                if not ymax or y > ymax:
+                    ymax = y
+            if xmin is None or ymin is None or xmax is None or ymax is None:
+                raise ValueError("None of the cells has a value.")
+            return Extent(
+                xmin - self.cell_size.x / 2,
+                ymin - self.cell_size.y / 2,
+                xmax + self.cell_size.x / 2,
+                ymax + self.cell_size.y / 2,
+            )
+
+        return self._get("_data_extent", lambda: f(self))
 
     def to_points(self) -> Iterable[Point]:
         for y, row in enumerate(self.data):
