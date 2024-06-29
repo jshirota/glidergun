@@ -967,6 +967,9 @@ class Grid:
         )
         return self._create((255 * (shaded + 1) / 2))
 
+    def viewshed(self, points: Iterable[Tuple[float, float]]):
+        raise NotImplementedError()
+
     def reclass(self, *mappings: Tuple[float, float, float]):
         conditions = [
             (self.data >= min) & (self.data < max) for min, max, _ in mappings
@@ -1586,6 +1589,15 @@ def interp_rbf(
         )
 
     return interpolate(f, points, epsg, cell_size)
+
+
+def distance(
+    points: Iterable[Tuple[float, float]],
+    extent: Extent,
+    epsg: Union[int, CRS],
+    cell_size: Union[Tuple[float, float], float],
+):
+    raise NotImplementedError()
 
 
 def _nodata(dtype: str) -> Union[float, int, None]:
