@@ -11,6 +11,7 @@ from glidergun._grid import (
     Grid,
     con,
     create,
+    distance,
     grid,
     interp_linear,
     interp_nearest,

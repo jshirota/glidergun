@@ -1592,12 +1592,36 @@ def interp_rbf(
 
 
 def distance(
-    points: Iterable[Tuple[float, float]],
-    extent: Extent,
+    extent: Tuple[float, float, float, float],
     epsg: Union[int, CRS],
     cell_size: Union[Tuple[float, float], float],
+    *points: Tuple[float, float],
 ):
-    raise NotImplementedError()
+    crs = CRS.from_epsg(epsg) if isinstance(epsg, int) else epsg
+    g = create(extent, crs, cell_size)
+
+    if len(points) > 1:
+        grids = [distance(extent, epsg, cell_size, p) for p in points]
+        return minimum(*grids)
+
+    point = list(points)[0]
+    xmin, ymin, xmax, ymax = extent
+    cell_size = (
+        CellSize(cell_size, cell_size)
+        if isinstance(cell_size, (int, float))
+        else CellSize(*cell_size)
+    )
+    w = int((xmax - xmin) / cell_size.x)
+    h = int((ymax - ymin) / cell_size.y)
+    dx = (int((xmin - point[0]) / cell_size.x))
+    dy = (int((point[1] - ymax) / cell_size.y))
+    data = np.meshgrid(np.array(range(dx, w + dx)),
+                       np.array(range(dy, h + dy)))
+
+    gx = _create(data[0], crs, g.transform)
+    gy = _create(data[1], crs, g.transform)
+
+    return (gx ** 2 + gy ** 2) ** (1 / 2)
 
 
 def _nodata(dtype: str) -> Union[float, int, None]:
