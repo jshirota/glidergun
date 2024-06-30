@@ -1597,30 +1597,21 @@ def distance(
     cell_size: Union[Tuple[float, float], float],
     *points: Tuple[float, float],
 ):
-    crs = CRS.from_epsg(epsg) if isinstance(epsg, int) else epsg
-    g = create(extent, crs, cell_size)
+    g = create(extent, epsg, cell_size)
 
     if len(points) > 1:
         grids = [distance(extent, epsg, cell_size, p) for p in points]
         return minimum(*grids)
 
     point = list(points)[0]
-    xmin, ymin, xmax, ymax = extent
-    cell_size = (
-        CellSize(cell_size, cell_size)
-        if isinstance(cell_size, (int, float))
-        else CellSize(*cell_size)
-    )
-    w = int((xmax - xmin) / cell_size.x)
-    h = int((ymax - ymin) / cell_size.y)
-    dx = (int((xmin - point[0]) / cell_size.x))
-    dy = (int((point[1] - ymax) / cell_size.y))
+    w = int((g.extent.xmax - g.extent.xmin) / g.cell_size.x)
+    h = int((g.extent.ymax - g.extent.ymin) / g.cell_size.y)
+    dx = (int((g.extent.xmin - point[0]) / g.cell_size.x))
+    dy = (int((point[1] - g.extent.ymax) / g.cell_size.y))
     data = np.meshgrid(np.array(range(dx, w + dx)),
                        np.array(range(dy, h + dy)))
-
-    gx = _create(data[0], crs, g.transform)
-    gy = _create(data[1], crs, g.transform)
-
+    gx = _create(data[0], g.crs, g.transform)
+    gy = _create(data[1], g.crs, g.transform)
     return (gx ** 2 + gy ** 2) ** (1 / 2)
 
 
