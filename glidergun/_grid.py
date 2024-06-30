@@ -946,6 +946,10 @@ class Grid:
             grid = con(grid.focal_count(value, 1, True) > 0, value, grid)
         return grid
 
+    def distance(self):
+        points = [(p.x, p.y) for p in self.to_points() if p.value]
+        return distance(self.extent, self.crs, self.cell_size, *points)
+
     def randomize(self):
         return self._create(np.random.rand(self.height, self.width))
 
@@ -1051,7 +1055,7 @@ class Grid:
     def to_points(self) -> Iterable[Point]:
         for y, row in enumerate(self.data):
             for x, value in enumerate(row):
-                if np.isfinite(value):
+                if self.dtype != "bool" and np.isfinite(value) or value:
                     yield Point(
                         self.xmin + (x + 0.5) * self.cell_size.x,
                         self.ymax - (y + 0.5) * self.cell_size.y,
@@ -1595,9 +1599,12 @@ def distance(
     extent: Tuple[float, float, float, float],
     epsg: Union[int, CRS],
     cell_size: Union[Tuple[float, float], float],
-    *points: Tuple[float, float],
+    *points: Tuple[float, float]
 ):
     g = create(extent, epsg, cell_size)
+
+    if len(points) > 100:
+        raise ValueError("Exceeds the limit of 100 points.")
 
     if len(points) > 1:
         grids = [distance(extent, epsg, cell_size, p) for p in points]
