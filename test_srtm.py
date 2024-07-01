@@ -8,6 +8,19 @@ from glidergun import Grid, con, grid, interp_linear, interp_nearest, interp_rbf
 dem = grid("./.data/n55_e008_1arc_v3.bil")
 
 
+def test_distance_1():
+    g = (dem.resample(0.01) > 50).distance()
+    assert g.round(4).md5 == "ef1eb76cf41761b5c8d62f144c3441ec"
+
+
+def test_distance_2():
+    g = dem.distance((8.2, 55.3))
+    assert round(g.value(8.2, 55.3), 3) == 0.0
+    assert round(g.value(8.5, 55.3), 3) == 0.3
+    assert round(g.value(8.2, 55.7), 3) == 0.4
+    assert round(g.value(8.5, 55.7), 3) == 0.5
+
+
 def test_aspect():
     g = dem.aspect()
     assert g.round(4).md5 == "e203f3540ab892ab9c69b386af1b47e9"

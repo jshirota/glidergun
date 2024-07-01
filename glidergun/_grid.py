@@ -946,8 +946,9 @@ class Grid:
             grid = con(grid.focal_count(value, 1, True) > 0, value, grid)
         return grid
 
-    def distance(self):
-        points = [(p.x, p.y) for p in self.to_points() if p.value]
+    def distance(self, *points: Tuple[float, float]):
+        if not points:
+            points = tuple((p.x, p.y) for p in self.to_points())
         return distance(self.extent, self.crs, self.cell_size, *points)
 
     def randomize(self):
@@ -1603,8 +1604,11 @@ def distance(
 ):
     g = create(extent, epsg, cell_size)
 
-    if len(points) > 100:
-        raise ValueError("Exceeds the limit of 100 points.")
+    if len(points) == 0:
+        raise ValueError("Distance function requires at least one point.")
+
+    if len(points) > 1000:
+        raise ValueError("Distance function only accepts up to 1000 points.")
 
     if len(points) > 1:
         grids = [distance(extent, epsg, cell_size, p) for p in points]
@@ -1615,8 +1619,8 @@ def distance(
     h = int((g.extent.ymax - g.extent.ymin) / g.cell_size.y)
     dx = (int((g.extent.xmin - point[0]) / g.cell_size.x))
     dy = (int((point[1] - g.extent.ymax) / g.cell_size.y))
-    data = np.meshgrid(np.array(range(dx, w + dx)),
-                       np.array(range(dy, h + dy)))
+    data = np.meshgrid(np.array(range(dx, w + dx)) * g.cell_size.x,
+                       np.array(range(dy, h + dy)) * g.cell_size.y)
     gx = _create(data[0], g.crs, g.transform)
     gy = _create(data[1], g.crs, g.transform)
     return (gx ** 2 + gy ** 2) ** (1 / 2)
