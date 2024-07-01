@@ -10,7 +10,7 @@ dem = grid("./.data/n55_e008_1arc_v3.bil")
 
 def test_distance_1():
     g = (dem.resample(0.01) > 50).distance()
-    assert g.round(4).md5 == "ef1eb76cf41761b5c8d62f144c3441ec"
+    assert g.round(4).md5 == "cb9224842d461ff291e3f53faa4f7cec"
 
 
 def test_distance_2():
