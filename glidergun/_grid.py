@@ -948,7 +948,7 @@ class Grid:
 
     def distance(self, *points: Tuple[float, float]):
         if not points:
-            points = tuple((p.x, p.y) for p in self.to_points())
+            points = tuple((p.x, p.y) for p in self.to_points() if p.value)
         return distance(self.extent, self.crs, self.cell_size, *points)
 
     def randomize(self):
@@ -1056,7 +1056,7 @@ class Grid:
     def to_points(self) -> Iterable[Point]:
         for y, row in enumerate(self.data):
             for x, value in enumerate(row):
-                if self.dtype != "bool" and np.isfinite(value) or value:
+                if np.isfinite(value):
                     yield Point(
                         self.xmin + (x + 0.5) * self.cell_size.x,
                         self.ymax - (y + 0.5) * self.cell_size.y,
