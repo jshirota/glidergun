@@ -1030,7 +1030,7 @@ class Grid:
         return float(self.data[int(yoff), int(xoff)])
 
     @property
-    def data_extent(self):
+    def data_extent(self) -> Extent:
         def f(self):
             xmin, ymin, xmax, ymax = None, None, None, None
             for x, y, _ in self.to_points():
