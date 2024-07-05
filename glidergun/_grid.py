@@ -1032,6 +1032,8 @@ class Grid:
     @property
     def data_extent(self) -> Extent:
         def f(self):
+            if not self.has_nan:
+                return self.extent
             xmin, ymin, xmax, ymax = None, None, None, None
             for x, y, _ in self.to_points():
                 if not xmin or x < xmin:
