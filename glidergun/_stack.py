@@ -21,6 +21,7 @@ from glidergun._grid import (
     standardize,
 )
 from glidergun._literals import DataType
+from glidergun._utils import create_parent_directory
 
 Operand = Union["Stack", Grid, float, int]
 
@@ -302,6 +303,7 @@ class Stack:
             grids = tuple(con(g.is_nan(), nodata, g) for g in grids)
 
         if isinstance(file, str):
+            create_parent_directory(file)
             with rasterio.open(
                 file,
                 "w",

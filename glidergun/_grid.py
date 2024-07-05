@@ -48,6 +48,7 @@ from glidergun._literals import (
     InterpolationKernel,
     ResamplingMethod,
 )
+from glidergun._utils import create_parent_directory
 
 
 class Extent(NamedTuple):
@@ -1207,6 +1208,7 @@ class Grid:
             grid = con(grid.is_nan(), nodata, grid)
 
         if isinstance(file, str):
+            create_parent_directory(file)
             with rasterio.open(
                 file,
                 "w",
