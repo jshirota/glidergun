@@ -9,6 +9,7 @@ import glidergun._ipython
 from glidergun._grid import (
     Extent,
     Grid,
+    clip,
     con,
     create,
     distance,

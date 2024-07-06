@@ -1435,6 +1435,11 @@ def load_model(file: str) -> GridEstimator[Any]:
     return GridEstimator.load(file)
 
 
+def clip(extent: Tuple[float, float, float, float], *files: Union[str, MemoryFile, Grid]):
+    grids = (f if isinstance(f, Grid) else grid(f) for f in files)
+    return mosaic(*(g.clip(g.extent.intersect(Extent(*extent))) for g in grids))
+
+
 def mosaic(*grids: Grid) -> Grid:
     grids_adjusted = standardize(*grids, extent="union")
     result = grids_adjusted[0]
