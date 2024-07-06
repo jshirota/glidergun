@@ -1067,9 +1067,8 @@ class Grid:
                     )
 
     def to_polygons(self) -> Iterable[Tuple[Polygon, float]]:
-        for shape, value in features.shapes(
-            self.data, mask=np.isfinite(self.data), transform=self.transform
-        ):
+        grid = self * 1
+        for shape, value in features.shapes(grid.data, mask=np.isfinite(grid.data), transform=grid.transform):
             if np.isfinite(value):
                 coordinates = shape["coordinates"]
                 yield Polygon(coordinates[0], coordinates[1:]), float(value)
