@@ -1305,16 +1305,17 @@ def _read(dataset, index, extent):
         h = int(dataset.profile.data["height"])
         e1 = Extent(*extent)
         e2 = _extent(w, h, dataset.transform)
-        xmin, ymin, xmax, ymax = e1.intersect(e2)
-        left = (xmin - e2.xmin) / (e2.xmax - e2.xmin) * w
-        right = (xmax - e2.xmin) / (e2.xmax - e2.xmin) * w
-        top = (e2.ymax - ymax) / (e2.ymax - e2.ymin) * h
-        bottom = (e2.ymax - ymin) / (e2.ymax - e2.ymin) * h
+        e = e1.intersect(e2)
+        left = (e.xmin - e2.xmin) / (e2.xmax - e2.xmin) * w
+        right = (e.xmax - e2.xmin) / (e2.xmax - e2.xmin) * w
+        top = (e2.ymax - e.ymax) / (e2.ymax - e2.ymin) * h
+        bottom = (e2.ymax - e.ymin) / (e2.ymax - e2.ymin) * h
         window = Window(left, top, right, bottom)  # type: ignore
+        width = right - left
+        height = bottom - top
         data = dataset.read(index, window=window)
         grid = _create(data, dataset.crs, from_bounds(
-            xmin, ymin, xmax, ymax, width=right - left, height=bottom - top
-        ))
+            *e, width, height)).clip(e)
     else:
         data = dataset.read(index)
         grid = _create(data, dataset.crs, dataset.transform)
