@@ -1310,12 +1310,11 @@ def _read(dataset, index, extent):
         right = (e.xmax - e2.xmin) / (e2.xmax - e2.xmin) * w
         top = (e2.ymax - e.ymax) / (e2.ymax - e2.ymin) * h
         bottom = (e2.ymax - e.ymin) / (e2.ymax - e2.ymin) * h
-        window = Window(left, top, right, bottom)  # type: ignore
         width = right - left
         height = bottom - top
+        window = Window(left, top, width, height)  # type: ignore
         data = dataset.read(index, window=window)
-        grid = _create(data, dataset.crs, from_bounds(
-            *e, width, height)).clip(e)
+        grid = _create(data, dataset.crs, from_bounds(*e, width, height))
     else:
         data = dataset.read(index)
         grid = _create(data, dataset.crs, dataset.transform)
