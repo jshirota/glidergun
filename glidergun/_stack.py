@@ -380,7 +380,7 @@ def stack(*grids) -> Stack:
                 rasterio.open(grid) if isinstance(grid, str) else grid.open()
             ) as dataset:
                 for index in dataset.indexes:
-                    band = _read(dataset, index)
+                    band = _read(dataset, index, None)
                     bands.append(band)
 
     return Stack(standardize(*bands))

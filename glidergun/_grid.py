@@ -30,8 +30,9 @@ from rasterio import features
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
-from rasterio.transform import Affine
+from rasterio.transform import Affine, from_bounds
 from rasterio.warp import Resampling, calculate_default_transform, reproject
+from rasterio.windows import Window
 from scipy.interpolate import (
     LinearNDInterpolator,
     NearestNDInterpolator,
@@ -197,23 +198,23 @@ class Grid:
 
     @property
     def xmin(self) -> float:
-        return self.transform.c
+        return self.extent.xmin
 
     @property
     def ymin(self) -> float:
-        return self.ymax + self.height * self.transform.e
+        return self.extent.ymin
 
     @property
     def xmax(self) -> float:
-        return self.xmin + self.width * self.transform.a
+        return self.extent.xmax
 
     @property
     def ymax(self) -> float:
-        return self.transform.f
+        return self.extent.ymax
 
     @property
     def extent(self) -> Extent:
-        return Extent(self.xmin, self.ymin, self.xmax, self.ymax)
+        return _extent(self.width, self.height, self.transform)
 
     @property
     def mean(self) -> float:
@@ -245,7 +246,9 @@ class Grid:
 
     @property
     def md5(self) -> str:
-        return self._get("_md5", lambda: hashlib.md5(self.data.copy(order="C")).hexdigest())
+        return self._get(
+            "_md5", lambda: hashlib.md5(self.data.copy(order="C")).hexdigest()
+        )
 
     def _get(self, name: str, func: Callable):
         if not hasattr(self, name):
@@ -1068,7 +1071,9 @@ class Grid:
 
     def to_polygons(self) -> Iterable[Tuple[Polygon, float]]:
         grid = self * 1
-        for shape, value in features.shapes(grid.data, mask=np.isfinite(grid.data), transform=grid.transform):
+        for shape, value in features.shapes(
+            grid.data, mask=np.isfinite(grid.data), transform=grid.transform
+        ):
             if np.isfinite(value):
                 coordinates = shape["coordinates"]
                 yield Polygon(coordinates[0], coordinates[1:]), float(value)
@@ -1091,8 +1096,7 @@ class Grid:
 
         grid1 = self - self.min
         grid2 = grid1 / grid1.max
-        arrays = plt.get_cmap(cmap)(grid2.data).transpose(
-            2, 0, 1)[:3]
+        arrays = plt.get_cmap(cmap)(grid2.data).transpose(2, 0, 1)[:3]
         mask = self.is_nan()
         r, g, b = [self._create(a * 253 + 1).set_nan(mask) for a in arrays]
         return stack(r, g, b)
@@ -1233,7 +1237,11 @@ class Grid:
 
 
 @overload
-def grid(file: str, index: int = 1) -> Grid:
+def grid(
+    file: str,
+    index: int = 1,
+    extent: Optional[Tuple[float, float, float, float]] = None,
+) -> Grid:
     """Creates a new grid from a file path.
 
     Args:
@@ -1247,7 +1255,11 @@ def grid(file: str, index: int = 1) -> Grid:
 
 
 @overload
-def grid(file: MemoryFile, index: int = 1) -> Grid:
+def grid(
+    file: MemoryFile,
+    index: int = 1,
+    extent: Optional[Tuple[float, float, float, float]] = None,
+) -> Grid:
     """Creates a new grid from an in-memory file.
 
     Args:
@@ -1260,13 +1272,17 @@ def grid(file: MemoryFile, index: int = 1) -> Grid:
     ...
 
 
-def grid(file, index: int = 1) -> Grid:
+def grid(
+    file,
+    index: int = 1,
+    extent: Optional[Tuple[float, float, float, float]] = None,
+) -> Grid:
     if isinstance(file, str):
         with rasterio.open(file) as dataset:
-            return _read(dataset, index)
+            return _read(dataset, index, extent)
     elif isinstance(file, MemoryFile):
         with file.open() as dataset:
-            return _read(dataset, index)
+            return _read(dataset, index, extent)
     raise ValueError()
 
 
@@ -1280,9 +1296,34 @@ def _create(data: ndarray, crs: CRS, transform: Affine):
     return Grid(data, crs if crs else CRS.from_epsg(3857), transform)
 
 
-def _read(dataset, index):
-    grid = _create(dataset.read(index), dataset.crs, dataset.transform)
+def _read(dataset, index, extent):
+    if extent:
+        w = int(dataset.profile.data["width"])
+        h = int(dataset.profile.data["height"])
+        e1 = Extent(*extent)
+        e2 = _extent(w, h, dataset.transform)
+        xmin, ymin, xmax, ymax = e1.intersect(e2)
+        left = (xmin - e2.xmin) / (e2.xmax - e2.xmin) * w
+        right = (xmax - e2.xmin) / (e2.xmax - e2.xmin) * w
+        top = (e2.ymax - ymax) / (e2.ymax - e2.ymin) * h
+        bottom = (e2.ymax - ymin) / (e2.ymax - e2.ymin) * h
+        data = dataset.read(index, window=Window(
+            left, top, right, bottom))  # type: ignore
+        grid = _create(data, dataset.crs, from_bounds(
+            xmin, ymin, xmax, ymax, width=right - left, height=bottom - top
+        ))
+    else:
+        data = dataset.read(index)
+        grid = _create(data, dataset.crs, dataset.transform)
     return grid if dataset.nodata is None else grid.set_nan(dataset.nodata)
+
+
+def _extent(width, height, transform) -> Extent:
+    xmin = transform.c
+    ymax = transform.f
+    ymin = ymax + height * transform.e
+    xmax = xmin + width * transform.a
+    return Extent(xmin, ymin, xmax, ymax)
 
 
 def _metadata(grid: Grid):
@@ -1435,7 +1476,9 @@ def load_model(file: str) -> GridEstimator[Any]:
     return GridEstimator.load(file)
 
 
-def clip(extent: Tuple[float, float, float, float], *files: Union[str, MemoryFile, Grid]):
+def clip(
+    extent: Tuple[float, float, float, float], *files: Union[str, MemoryFile, Grid]
+):
     grids = (f if isinstance(f, Grid) else grid(f) for f in files)
     return mosaic(*(g.clip(g.extent.intersect(Extent(*extent))) for g in grids))
 
@@ -1546,8 +1589,12 @@ def interpolate(
 
     x_buffer = (xmax - xmin) * 0.1
     y_buffer = (ymax - ymin) * 0.1
-    xmin, ymin, xmax, ymax = xmin - x_buffer, ymin - \
-        y_buffer, xmax + x_buffer, ymax + y_buffer
+    xmin, ymin, xmax, ymax = (
+        xmin - x_buffer,
+        ymin - y_buffer,
+        xmax + x_buffer,
+        ymax + y_buffer,
+    )
 
     extent = Extent(xmin, ymin, xmax, ymax)
     grid = create(extent, epsg, cell_size)
@@ -1608,7 +1655,7 @@ def distance(
     extent: Tuple[float, float, float, float],
     epsg: Union[int, CRS],
     cell_size: Union[Tuple[float, float], float],
-    *points: Tuple[float, float]
+    *points: Tuple[float, float],
 ):
     g = create(extent, epsg, cell_size)
 
@@ -1625,13 +1672,15 @@ def distance(
     point = list(points)[0]
     w = int((g.extent.xmax - g.extent.xmin) / g.cell_size.x)
     h = int((g.extent.ymax - g.extent.ymin) / g.cell_size.y)
-    dx = (int((g.extent.xmin - point[0]) / g.cell_size.x))
-    dy = (int((point[1] - g.extent.ymax) / g.cell_size.y))
-    data = np.meshgrid(np.array(range(dx, w + dx)) * g.cell_size.x,
-                       np.array(range(dy, h + dy)) * g.cell_size.y)
+    dx = int((g.extent.xmin - point[0]) / g.cell_size.x)
+    dy = int((point[1] - g.extent.ymax) / g.cell_size.y)
+    data = np.meshgrid(
+        np.array(range(dx, w + dx)) * g.cell_size.x,
+        np.array(range(dy, h + dy)) * g.cell_size.y,
+    )
     gx = _create(data[0], g.crs, g.transform)
     gy = _create(data[1], g.crs, g.transform)
-    return (gx ** 2 + gy ** 2) ** (1 / 2)
+    return (gx**2 + gy**2) ** (1 / 2)
 
 
 def _nodata(dtype: str) -> Union[float, int, None]:
