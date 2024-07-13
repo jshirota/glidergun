@@ -165,6 +165,9 @@ class Grid:
     def __post_init__(self):
         self.data.flags.writeable = False
 
+        if self.width * self.height == 0:
+            raise ValueError("Empty raster.")
+
     def __repr__(self):
         d = 3 if self.dtype.startswith("float") else 0
         return (
@@ -1307,8 +1310,8 @@ def _read(dataset, index, extent):
         right = (xmax - e2.xmin) / (e2.xmax - e2.xmin) * w
         top = (e2.ymax - ymax) / (e2.ymax - e2.ymin) * h
         bottom = (e2.ymax - ymin) / (e2.ymax - e2.ymin) * h
-        data = dataset.read(index, window=Window(
-            left, top, right, bottom))  # type: ignore
+        window = Window(left, top, right, bottom)  # type: ignore
+        data = dataset.read(index, window=window)
         grid = _create(data, dataset.crs, from_bounds(
             xmin, ymin, xmax, ymax, width=right - left, height=bottom - top
         ))
@@ -1474,13 +1477,6 @@ def maximum(*grids: Grid) -> Grid:
 
 def load_model(file: str) -> GridEstimator[Any]:
     return GridEstimator.load(file)
-
-
-def clip(
-    extent: Tuple[float, float, float, float], *files: Union[str, MemoryFile, Grid]
-):
-    grids = (f if isinstance(f, Grid) else grid(f) for f in files)
-    return mosaic(*(g.clip(g.extent.intersect(Extent(*extent))) for g in grids))
 
 
 def mosaic(*grids: Grid) -> Grid:
@@ -1691,3 +1687,18 @@ def _nodata(dtype: str) -> Union[float, int, None]:
     if dtype.startswith("uint"):
         return np.iinfo(dtype).max
     return np.iinfo(dtype).min
+
+
+class Mosaic:
+    def __init__(self, *files: Union[str, MemoryFile, Grid]) -> None:
+        self.files = list(files)
+
+    def _read(self, extent: Tuple[float, float, float, float]):
+        for f in self.files:
+            try:
+                yield f if isinstance(f, Grid) else grid(f, extent=extent)
+            except ValueError:
+                pass
+
+    def clip(self, extent: Tuple[float, float, float, float]):
+        return mosaic(*self._read(extent))
