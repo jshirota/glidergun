@@ -43,10 +43,9 @@ def _map(
     obj: Union[Grid, Stack],
     color,
     opacity: float,
-    folium_map,
+    basemap,
     width: int,
     height: int,
-    basemap: Optional[str],
     attribution: Optional[str],
     grayscale: bool = True,
     **kwargs,
@@ -69,7 +68,7 @@ def _map(
     figure = folium.Figure(width=str(width), height=height)
     bounds = [[obj_4326.ymin, obj_4326.xmin], [obj_4326.ymax, obj_4326.xmax]]
 
-    if folium_map is None:
+    if isinstance(basemap, str) or basemap is None:
         if basemap:
             tile_layer = folium.TileLayer(basemap, attr=attribution)
         else:
@@ -92,6 +91,8 @@ def _map(
                 {{% endmacro %}}
             """
             )
+    else:
+        folium_map = basemap
 
     folium.raster_layers.ImageOverlay(  # type: ignore
         image=_thumbnail(obj_3857, color, (20, 20)),
