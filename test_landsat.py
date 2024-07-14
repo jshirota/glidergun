@@ -28,9 +28,9 @@ def test_extract_bands():
 
 def fit(regressor):
     s = landsat.resample(900)
-    train_data = s.clip((467815, 6190585, 559550, 6273454))
+    train_data = s.clip(467815, 6190585, 559550, 6273454)
     model = train_data.grids[0].fit(regressor, *train_data.grids[1:])
-    test_data = s.clip((478144, 6104680, 526666, 6148383))
+    test_data = s.clip(478144, 6104680, 526666, 6148383)
     score = model.score(test_data.grids[0], *test_data.grids[1:])
     actual = test_data.grids[0]
     predicted = model.predict(*test_data.grids[1:])

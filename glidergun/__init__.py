@@ -9,7 +9,6 @@ import glidergun._ipython
 from glidergun._grid import (
     Extent,
     Grid,
-    Mosaic,
     con,
     create,
     distance,
@@ -26,4 +25,5 @@ from glidergun._grid import (
     standardize,
     std,
 )
+from glidergun._mosaic import Mosaic
 from glidergun._stack import Stack, stack

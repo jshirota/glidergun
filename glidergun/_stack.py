@@ -236,8 +236,8 @@ class Stack:
     def each(self, func: Callable[[Grid], Grid]):
         return stack(*map(func, self.grids))
 
-    def clip(self, extent: Tuple[float, float, float, float]):
-        return self.each(lambda g: g.clip(extent))
+    def clip(self, xmin: float, ymin: float, xmax: float, ymax: float):
+        return self.each(lambda g: g.clip(xmin, ymin, xmax, ymax))
 
     def extract_bands(self, *bands: int):
         return stack(*(self.grids[i - 1] for i in bands))

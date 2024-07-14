@@ -930,8 +930,8 @@ class Grid:
         height = (ymax - ymin) / abs(self.transform.e) / scaling_y
         return self._reproject(transform, self.crs, width, height, resampling)
 
-    def clip(self, extent: Tuple[float, float, float, float]):
-        return self._resample(extent, self.cell_size, Resampling.nearest)
+    def clip(self, xmin: float, ymin: float, xmax: float, ymax: float):
+        return self._resample((xmin, ymin, xmax, ymax), self.cell_size, Resampling.nearest)
 
     def resample(
         self,
@@ -1412,12 +1412,10 @@ def _batch(
         sys.stdout.flush()
         grids2 = [
             g.clip(
-                (
-                    grid.xmin + (xmin - buffer) * cell_size.x,
-                    grid.ymin + (ymin - buffer) * cell_size.y,
-                    grid.xmin + (xmax + buffer) * cell_size.x,
-                    grid.ymin + (ymax + buffer) * cell_size.y,
-                )
+                grid.xmin + (xmin - buffer) * cell_size.x,
+                grid.ymin + (ymin - buffer) * cell_size.y,
+                grid.xmin + (xmax + buffer) * cell_size.x,
+                grid.ymin + (ymax + buffer) * cell_size.y,
             )
             for g in grids1
         ]
@@ -1426,12 +1424,10 @@ def _batch(
 
         grids4 = [
             g.clip(
-                (
-                    grid.xmin + xmin * cell_size.x,
-                    grid.ymin + ymin * cell_size.y,
-                    grid.xmin + xmax * cell_size.x,
-                    grid.ymin + ymax * cell_size.y,
-                )
+                grid.xmin + xmin * cell_size.x,
+                grid.ymin + ymin * cell_size.y,
+                grid.xmin + xmax * cell_size.x,
+                grid.ymin + ymax * cell_size.y,
             )
             for g in grids3
         ]
@@ -1539,7 +1535,7 @@ def standardize(
         if grid.cell_size != cell_size_standardized:
             grid = grid.resample(cell_size_standardized)
         if grid.extent != extent_standardized:
-            grid = grid.clip(extent_standardized)  # type: ignore
+            grid = grid.clip(*extent_standardized)  # type: ignore
         results.append(grid)
 
     return tuple(results)
@@ -1687,18 +1683,3 @@ def _nodata(dtype: str) -> Union[float, int, None]:
     if dtype.startswith("uint"):
         return np.iinfo(dtype).max
     return np.iinfo(dtype).min
-
-
-class Mosaic:
-    def __init__(self, *files: Union[str, MemoryFile, Grid]) -> None:
-        self.files = list(files)
-
-    def _read(self, extent: Tuple[float, float, float, float]):
-        for f in self.files:
-            try:
-                yield f if isinstance(f, Grid) else grid(f, extent=extent)
-            except ValueError:
-                pass
-
-    def clip(self, extent: Tuple[float, float, float, float]):
-        return mosaic(*self._read(extent))

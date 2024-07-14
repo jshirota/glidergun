@@ -3,7 +3,7 @@ import os
 import pytest
 import rasterio
 import shutil
-from glidergun import Grid, con, grid, interp_linear, interp_nearest, interp_rbf, mosaic
+from glidergun import Grid, Mosaic, con, grid, interp_linear, interp_nearest, interp_rbf, mosaic
 
 dem = grid("./.data/n55_e008_1arc_v3.bil")
 
@@ -93,14 +93,14 @@ def test_buffer_3():
 def test_clip():
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin + 0.02, ymin + 0.03, xmax - 0.04, ymax - 0.05
-    for a, b in zip(dem.clip(extent).extent, extent):
+    for a, b in zip(dem.clip(*extent).extent, extent):
         assert pytest.approx(a, 0.001) == b
 
 
 def test_clip_2():
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin - 0.02, ymin - 0.03, xmax + 0.04, ymax + 0.05
-    for a, b in zip(dem.clip(extent).extent, extent):
+    for a, b in zip(dem.clip(*extent).extent, extent):
         assert pytest.approx(a, 0.001) == b
 
 
@@ -483,3 +483,24 @@ def test_save_jpg():
 
 def test_save_png():
     save(dem, "test_grid.png", strict=False)
+
+
+def test_mosaic_dataset():
+    m = Mosaic(
+        "./.data/n55_e008_1arc_v3.bil",
+        "./.data/n55_e009_1arc_v3.bil",
+    )
+    assert m.clip(8, 55, 9, 56).extent == pytest.approx(
+        (8, 55, 9, 56), 0.001)
+    assert m.clip(8, 55, 10, 56).extent == pytest.approx(
+        (8, 55, 10, 56), 0.001)
+    assert m.clip(8.2, 55.2, 9.2, 56.2).extent == pytest.approx(
+        (8.2, 55.2, 9.2, 56.0), 0.001)
+    assert m.clip(7.5, 55, 10, 56).extent == pytest.approx(
+        (8, 55, 10, 56), 0.001)
+    assert m.clip(8, 50, 10, 56).extent == pytest.approx(
+        (8, 55, 10, 56), 0.001)
+    assert m.clip(8, 55, 15, 56).extent == pytest.approx(
+        (8, 55, 10, 56), 0.001)
+    assert m.clip(8, 55, 10, 60).extent == pytest.approx(
+        (8, 55, 10, 56), 0.001)

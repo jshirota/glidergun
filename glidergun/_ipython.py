@@ -62,7 +62,7 @@ def _map(
     )
 
     if obj_4326.extent != extent:
-        obj_4326 = obj_4326.clip(extent)
+        obj_4326 = obj_4326.clip(*extent)
 
     obj_3857 = obj_4326.project(3857)
 
