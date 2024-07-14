@@ -1,6 +1,6 @@
 import dataclasses
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Tuple, Union, overload
+from typing import Any, Callable, List, Optional, Tuple, Union, overload
 
 import rasterio
 from rasterio.crs import CRS
@@ -20,7 +20,7 @@ from glidergun._grid import (
     pca,
     standardize,
 )
-from glidergun._literals import DataType
+from glidergun._literals import BaseMap, DataType
 from glidergun._utils import create_parent_directory
 
 Operand = Union["Stack", Grid, float, int]
@@ -210,7 +210,7 @@ class Stack:
         self,
         rgb: Tuple[int, int, int] = (1, 2, 3),
         opacity: float = 1.0,
-        basemap=None,
+        basemap: Union[BaseMap, Any, None] = None,
         width: int = 800,
         height: int = 600,
         attribution: Optional[str] = None,

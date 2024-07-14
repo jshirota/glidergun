@@ -10,6 +10,7 @@ from typing import (
     Generic,
     Iterable,
     List,
+    Literal,
     NamedTuple,
     Optional,
     Protocol,
@@ -43,6 +44,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
 
 from glidergun._literals import (
+    BaseMap,
     ColorMap,
     DataType,
     ExtentResolution,
@@ -1154,7 +1156,7 @@ class Grid:
         self,
         cmap: Union[ColorMap, Any] = "gray",
         opacity: float = 1.0,
-        basemap=None,
+        basemap: Union[BaseMap, Any, None] = None,
         width: int = 800,
         height: int = 600,
         attribution: Optional[str] = None,

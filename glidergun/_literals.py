@@ -1,5 +1,11 @@
 from typing import Literal
 
+BaseMap = Literal[
+    "OpenStreetMap",
+    "Cartodb Positron",
+    "Cartodb dark_matter",
+]
+
 ColorMap = Literal[
     "Accent",
     "afmhot",
