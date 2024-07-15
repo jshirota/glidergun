@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "glidergun"
-version = "0.6.10"
+version = "0.7.0"
 authors = [
   { name="Jiro Shirota", email="jshirota@gmail.com" },
 ]

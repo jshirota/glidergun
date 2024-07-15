@@ -10,7 +10,6 @@ from typing import (
     Generic,
     Iterable,
     List,
-    Literal,
     NamedTuple,
     Optional,
     Protocol,
