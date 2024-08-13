@@ -110,7 +110,7 @@ class GridEstimator(Generic[T]):
     def fit(self, dependent_grid: "Grid", *explanatory_grids: "Grid", **kwargs: Any):
         grids = self._flatten(*[dependent_grid, *explanatory_grids])
         if type(self.model).__name__ == "TabularPredictor":
-            import pandas as pd
+            import pandas as pd  # type: ignore
             data = np.dstack(tuple(g.data.ravel()
                              for g in grids)).reshape(-1, len(grids))
             label = getattr(self.model, "label")
@@ -138,7 +138,7 @@ class GridEstimator(Generic[T]):
     def predict(self, *explanatory_grids: "Grid", **kwargs: Any) -> "Grid":
         grids = self._flatten(*explanatory_grids)
         if type(self.model).__name__ == "TabularPredictor":
-            import pandas as pd
+            import pandas as pd  # type: ignore
             data = np.dstack(tuple(g.data.ravel()
                              for g in grids)).reshape(-1, len(grids))
             df = pd.DataFrame(
