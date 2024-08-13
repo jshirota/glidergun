@@ -96,7 +96,6 @@ class Point(NamedTuple):
 
 class Estimator(Protocol):
     fit: Callable
-    score: Callable
     predict: Callable
 
 
@@ -108,27 +107,47 @@ class GridEstimator(Generic[T]):
         self.model: T = model
         self._dtype: DataType = "float32"
 
-    def fit(self, dependent_grid: "Grid", *explanatory_grids: "Grid"):
-        head, *tail = self._flatten(*[dependent_grid, *explanatory_grids])
-        self.model = self.model.fit(
-            np.array([g.data.ravel() for g in tail]).transpose(1, 0),
-            head.data.ravel(),
-        )
+    def fit(self, dependent_grid: "Grid", *explanatory_grids: "Grid", **kwargs: Any):
+        grids = self._flatten(*[dependent_grid, *explanatory_grids])
+        if type(self.model).__name__ == "TabularPredictor":
+            import pandas as pd
+            data = np.dstack(tuple(g.data.ravel()
+                             for g in grids)).reshape(-1, len(grids))
+            label = getattr(self.model, "label")
+            df = pd.DataFrame(
+                data, columns=[label, *(f"grid{n}" for n in range(len(grids) - 1))])
+            self.model = self.model.fit(df, **kwargs)
+        else:
+            head, *tail = grids
+            self.model = self.model.fit(
+                np.array([g.data.ravel() for g in tail]).transpose(1, 0),
+                head.data.ravel(), **kwargs
+            )
         self._dtype = dependent_grid.dtype
         return self
 
-    def score(self, dependent_grid: "Grid", *explanatory_grids: "Grid") -> float:
-        head, *tail = self._flatten(dependent_grid, *explanatory_grids)
-        return self.model.score(
-            np.array([g.data.ravel() for g in tail]).transpose(
-                1, 0), head.data.ravel()
-        )
+    def score(self, dependent_grid: "Grid", *explanatory_grids: "Grid") -> Optional[float]:
+        score = getattr(self.model, "score", None)
+        if score:
+            head, *tail = self._flatten(dependent_grid, *explanatory_grids)
+            return score(
+                np.array([g.data.ravel() for g in tail]).transpose(
+                    1, 0), head.data.ravel()
+            )
 
-    def predict(self, *explanatory_grids: "Grid") -> "Grid":
+    def predict(self, *explanatory_grids: "Grid", **kwargs: Any) -> "Grid":
         grids = self._flatten(*explanatory_grids)
-        array = self.model.predict(
-            np.array([g.data.ravel() for g in grids]).transpose(1, 0)
-        )
+        if type(self.model).__name__ == "TabularPredictor":
+            import pandas as pd
+            data = np.dstack(tuple(g.data.ravel()
+                             for g in grids)).reshape(-1, len(grids))
+            df = pd.DataFrame(
+                data, columns=[f"grid{n}" for n in range(len(grids))])
+            array = self.model.predict(df, as_pandas=False, **kwargs)
+        else:
+            array = self.model.predict(
+                np.array([g.data.ravel() for g in grids]).transpose(1, 0), **kwargs
+            )
         grid = grids[0]
         return grid._create(array.reshape((grid.height, grid.width))).type(self._dtype)
 
@@ -251,7 +270,8 @@ class Grid:
     @property
     def md5(self) -> str:
         return self._get(
-            "_md5", lambda: hashlib.md5(self.data.copy(order="C")).hexdigest()
+            "_md5", lambda: hashlib.md5(self.data.copy(
+                order="C")).hexdigest()  # type: ignore
         )
 
     def _get(self, name: str, func: Callable):
@@ -1115,7 +1135,8 @@ class Grid:
         actual_range = self.max - self.min
 
         if actual_range == 0:
-            return self
+            n = (min_value + max_value) / 2
+            return self * 0 + n
 
         return (self - self.min) * expected_range / actual_range + min_value
 
@@ -1142,8 +1163,8 @@ class Grid:
             return self
         return self.percent_clip(0.1, 99.9).stretch(1, 254)
 
-    def fit(self, model: T, *explanatory_grids: "Grid") -> GridEstimator[T]:
-        return GridEstimator(model).fit(self, *explanatory_grids)
+    def fit(self, model: T, *explanatory_grids: "Grid", **kwargs: Any) -> GridEstimator[T]:
+        return GridEstimator(model).fit(self, *explanatory_grids, **kwargs)
 
     def hist(self, **kwargs):
         return plt.bar(list(self.bins.keys()), list(self.bins.values()), **kwargs)

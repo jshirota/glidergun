@@ -34,7 +34,7 @@ def fit(regressor):
     score = model.score(test_data.grids[0], *test_data.grids[1:])
     actual = test_data.grids[0]
     predicted = model.predict(*test_data.grids[1:])
-    assert score > 0.95
+    assert score and score > 0.95
     assert predicted.extent == actual.extent
 
 
