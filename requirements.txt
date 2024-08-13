@@ -7,7 +7,6 @@ scikit-learn
 scipy
 shapely
 
-autogluon
 build
 ipykernel
 pytest
