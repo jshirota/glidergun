@@ -1,9 +1,12 @@
-import numpy as np
 import os
+import shutil
+
+import numpy as np
 import pytest
 import rasterio
-import shutil
-from glidergun import Grid, con, grid, interp_linear, interp_nearest, interp_rbf, mosaic
+
+from glidergun import (Grid, con, grid, interp_linear, interp_nearest,
+                       interp_rbf, mosaic)
 
 dem = grid("./.data/n55_e008_1arc_v3.bil")
 

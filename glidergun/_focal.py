@@ -1,10 +1,12 @@
 import sys
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable, List, Tuple, Union, cast
+
 import numpy as np
 import scipy as sp
-from dataclasses import dataclass
 from numpy import ndarray
 from numpy.lib.stride_tricks import sliding_window_view
-from typing import TYPE_CHECKING, Any, Callable, List, Tuple, Union, cast
+
 from glidergun._types import StatsResult
 
 if TYPE_CHECKING:

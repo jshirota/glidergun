@@ -1,11 +1,14 @@
 import dataclasses
 import hashlib
+from dataclasses import dataclass
+from functools import cached_property
+from typing import (Any, Callable, Dict, Iterable, Optional, Tuple, Union,
+                    cast, overload)
+
 import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
 import scipy as sp
-from dataclasses import dataclass
-from functools import cached_property
 from numpy import arctan, arctan2, cos, gradient, ndarray, pi, sin, sqrt
 from rasterio import features
 from rasterio.crs import CRS
@@ -16,19 +19,21 @@ from rasterio.warp import Resampling, calculate_default_transform, reproject
 from rasterio.windows import Window
 from shapely import Polygon
 from sklearn.preprocessing import QuantileTransformer
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union, cast, overload
-from glidergun._estimation import Estimation
+
 from glidergun._focal import Focal
-from glidergun._literals import BaseMap, ColorMap, DataType, ExtentResolution, ResamplingMethod
+from glidergun._literals import (BaseMap, ColorMap, DataType, ExtentResolution,
+                                 ResamplingMethod)
+from glidergun._prediction import Prediction
 from glidergun._types import CellSize, Extent, GridCore, Point, Scaler
-from glidergun._utils import create_parent_directory, format_type, get_crs, get_nodata_value
+from glidergun._utils import (create_parent_directory, format_type, get_crs,
+                              get_nodata_value)
 from glidergun._zonal import Zonal
 
 Operand = Union["Grid", float, int]
 
 
 @dataclass(frozen=True)
-class Grid(GridCore, Estimation, Focal, Zonal):
+class Grid(GridCore, Prediction, Focal, Zonal):
     _cmap: Union[ColorMap, Any] = "gray"
 
     def __post_init__(self):

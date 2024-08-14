@@ -1,5 +1,7 @@
-from rasterio.io import MemoryFile
 from typing import List, Tuple, Union, overload
+
+from rasterio.io import MemoryFile
+
 from glidergun._grid import Grid, grid
 from glidergun._stack import Stack, stack
 

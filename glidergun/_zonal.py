@@ -1,8 +1,9 @@
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable, Union, cast
+
 import numpy as np
 import scipy as sp
-from dataclasses import dataclass
 from numpy import ndarray
-from typing import TYPE_CHECKING, Any, Callable, Union, cast
 
 if TYPE_CHECKING:
     from glidergun._grid import Grid

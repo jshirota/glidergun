@@ -1,8 +1,9 @@
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol
+
 from numpy import ndarray
 from rasterio.crs import CRS
 from rasterio.transform import Affine
-from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol
 
 if TYPE_CHECKING:
     from glidergun._grid import Grid

@@ -1,13 +1,16 @@
 import dataclasses
-import rasterio
 from dataclasses import dataclass
+from typing import Any, Callable, List, Optional, Tuple, Union, overload
+
+import rasterio
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
-from typing import Any, Callable, List, Optional, Tuple, Union, overload
+
 from glidergun._functions import pca
-from glidergun._grid import CellSize, Extent, Grid, Scaler, _metadata, _read, con, standardize
+from glidergun._grid import (CellSize, Extent, Grid, Scaler, _metadata, _read,
+                             con, standardize)
 from glidergun._literals import BaseMap, DataType
 from glidergun._utils import create_parent_directory, get_crs, get_nodata_value
 
