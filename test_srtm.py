@@ -3,7 +3,7 @@ import os
 import pytest
 import rasterio
 import shutil
-from glidergun import Grid, Mosaic, con, grid, interp_linear, interp_nearest, interp_rbf, mosaic
+from glidergun import Grid, con, grid, interp_linear, interp_nearest, interp_rbf, mosaic
 
 dem = grid("./.data/n55_e008_1arc_v3.bil")
 
@@ -163,6 +163,14 @@ def test_focal_mean_3():
     assert g2.md5 == g3.md5
 
 
+def test_focal_mean_4():
+    g1 = dem
+    g2 = g1.focal_mean(7)
+    assert g2.crs == g1.crs
+    assert g2.extent == g1.extent
+    assert g2.cell_size == g1.cell_size
+
+
 def test_from_polygons():
     g1 = dem.set_nan(-1 < dem < 10, 123.456)
     g2 = dem.from_polygons(g1.to_polygons())
@@ -221,7 +229,7 @@ def test_interp_rbf():
 
 def test_mosaic():
     g1 = grid("./.data/n55_e009_1arc_v3.bil")
-    g2 = mosaic(dem, g1)
+    g2 = dem.mosaic(g1)
     assert g2.crs == dem.crs
     xmin, ymin, xmax, ymax = g2.extent
     assert pytest.approx(xmin, 0.001) == dem.xmin
@@ -386,6 +394,11 @@ def test_resample_2():
     assert g.cell_size == (0.02, 0.03)
 
 
+def test_resample_3():
+    g = dem.resample((0.07, 0.04))
+    assert g.cell_size == (0.07, 0.04)
+
+
 def test_set_nan():
     g1 = dem.set_nan(dem < 10, 123.456)
     g2 = con(g1.is_nan(), 234.567, -g1)
@@ -486,7 +499,7 @@ def test_save_png():
 
 
 def test_mosaic_dataset():
-    m = Mosaic(
+    m = mosaic(
         "./.data/n55_e008_1arc_v3.bil",
         "./.data/n55_e009_1arc_v3.bil",
     )
@@ -504,3 +517,11 @@ def test_mosaic_dataset():
         (8, 55, 10, 56), 0.001)
     assert m.clip(8, 55, 10, 60).extent == pytest.approx(
         (8, 55, 10, 56), 0.001)
+
+
+def test_mosaic_eager_vs_lazy():
+    g = mosaic(grid("./.data/n55_e008_1arc_v3.bil"),
+               grid("./.data/n55_e009_1arc_v3.bil"))
+    m = mosaic("./.data/n55_e008_1arc_v3.bil", "./.data/n55_e009_1arc_v3.bil")
+
+    assert g.clip(8, 55, 8.5, 56).md5 == m.clip(8, 55, 8.5, 56).md5

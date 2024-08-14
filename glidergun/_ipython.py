@@ -1,13 +1,12 @@
-from base64 import b64encode
-from io import BytesIO
-from typing import Optional, Union
-
 import IPython
 import matplotlib.pyplot as plt
 import numpy as np
-
-from glidergun._grid import Extent, Grid
+from base64 import b64encode
+from io import BytesIO
+from typing import Optional, Union
+from glidergun._grid import Grid
 from glidergun._stack import Stack
+from glidergun._types import Extent
 
 
 def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
