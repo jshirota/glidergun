@@ -1,12 +1,15 @@
 
+from typing import Any, Callable, Iterable, Optional, Tuple, Union
+
 import numpy as np
 from numpy import ndarray
 from rasterio.crs import CRS
 from rasterio.transform import Affine
-from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator, RBFInterpolator
+from scipy.interpolate import (LinearNDInterpolator, NearestNDInterpolator,
+                               RBFInterpolator)
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from typing import Any, Callable, Iterable, Optional, Tuple, Union
+
 from glidergun._grid import Extent, Grid, con, grid, standardize
 from glidergun._literals import InterpolationKernel
 from glidergun._types import CellSize

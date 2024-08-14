@@ -1,9 +1,11 @@
-import IPython
-import matplotlib.pyplot as plt
-import numpy as np
 from base64 import b64encode
 from io import BytesIO
 from typing import Optional, Union
+
+import IPython
+import matplotlib.pyplot as plt
+import numpy as np
+
 from glidergun._grid import Grid
 from glidergun._stack import Stack
 from glidergun._types import Extent
@@ -64,7 +66,7 @@ def _map(
 
     obj_3857 = obj_4326.project(3857)
 
-    figure = folium.Figure(width=str(width), height=height)
+    figure = folium.Figure(width=str(width), height=str(height))
     bounds = [[obj_4326.ymin, obj_4326.xmin], [obj_4326.ymax, obj_4326.xmax]]
 
     if isinstance(basemap, str) or basemap is None:
@@ -78,7 +80,7 @@ def _map(
 
         options = {"zoom_control": False, **kwargs}
         folium_map = folium.Map(tiles=tile_layer, **options).add_to(figure)
-        folium_map.fit_bounds(bounds)
+        folium_map.fit_bounds(bounds)  # type: ignore
 
         if grayscale:
             macro = folium.MacroElement().add_to(folium_map)

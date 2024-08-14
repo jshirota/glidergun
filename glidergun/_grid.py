@@ -1,11 +1,14 @@
 import dataclasses
 import hashlib
+from dataclasses import dataclass
+from functools import cached_property
+from typing import (Any, Callable, Dict, Iterable, Optional, Tuple, Union,
+                    cast, overload)
+
 import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
 import scipy as sp
-from dataclasses import dataclass
-from functools import cached_property
 from numpy import arctan, arctan2, cos, gradient, ndarray, pi, sin, sqrt
 from rasterio import features
 from rasterio.crs import CRS
@@ -16,19 +19,21 @@ from rasterio.warp import Resampling, calculate_default_transform, reproject
 from rasterio.windows import Window
 from shapely import Polygon
 from sklearn.preprocessing import QuantileTransformer
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union, cast, overload
-from glidergun._estimation import Estimation
+
 from glidergun._focal import Focal
-from glidergun._literals import BaseMap, ColorMap, DataType, ExtentResolution, ResamplingMethod
+from glidergun._literals import (BaseMap, ColorMap, DataType, ExtentResolution,
+                                 ResamplingMethod)
+from glidergun._prediction import Prediction
 from glidergun._types import CellSize, Extent, GridCore, Point, Scaler
-from glidergun._utils import create_parent_directory, format_type, get_crs, get_nodata_value
+from glidergun._utils import (create_parent_directory, format_type, get_crs,
+                              get_nodata_value)
 from glidergun._zonal import Zonal
 
 Operand = Union["Grid", float, int]
 
 
 @dataclass(frozen=True)
-class Grid(GridCore, Estimation, Focal, Zonal):
+class Grid(GridCore, Prediction, Focal, Zonal):
     _cmap: Union[ColorMap, Any] = "gray"
 
     def __post_init__(self):
@@ -177,12 +182,16 @@ class Grid(GridCore, Estimation, Focal, Zonal):
 
     __rge__ = __le__
 
-    def __eq__(self, n: Operand):
+    def __eq__(self, n: object):
+        if not isinstance(n, (Grid, float, int)):
+            return NotImplemented
         return self._apply(self, n, np.equal)
 
     __req__ = __eq__
 
-    def __ne__(self, n: Operand):
+    def __ne__(self, n: object):
+        if not isinstance(n, (Grid, float, int)):
+            return NotImplemented
         return self._apply(self, n, np.not_equal)
 
     __rne__ = __ne__
@@ -625,7 +634,7 @@ class Grid(GridCore, Estimation, Focal, Zonal):
     ) -> None: ...
 
     @overload
-    def save(
+    def save(  # type: ignore
         self, file: MemoryFile, dtype: Optional[DataType] = None, driver: str = ""
     ) -> None: ...
 
@@ -699,20 +708,20 @@ def grid(
 
 
 @overload
-def grid(
+def grid(  # type: ignore
     data: MemoryFile,
 ) -> Grid: ...
 
 
 @overload
-def grid(
+def grid(  # type: ignore
     data: MemoryFile,
     extent: Tuple[float, float, float, float],
 ) -> Grid: ...
 
 
 @overload
-def grid(
+def grid(  # type: ignore
     data: MemoryFile,
     extent: Tuple[float, float, float, float],
     crs: Union[int, CRS, None] = None,
@@ -770,7 +779,7 @@ def grid(
             transform = extent
         elif extent:
             transform = from_bounds(*extent, data.shape[1], data.shape[0])
-        g = Grid(format_type(data), transform, get_crs(crs))
+        g = Grid(format_type(data), transform, get_crs(crs))  # type: ignore
     if g:
         return g
     raise ValueError()

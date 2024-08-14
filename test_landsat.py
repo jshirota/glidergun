@@ -1,11 +1,13 @@
 import os
+import shutil
+
 import pytest
 import rasterio
-import shutil
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.neural_network import MLPRegressor
 from sklearn.tree import DecisionTreeRegressor
+
 from glidergun import Stack, stack
 
 landsat = stack(

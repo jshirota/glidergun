@@ -1,24 +1,28 @@
-import numpy as np
 import pickle
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Generic, Optional, Protocol, TypeVar, Union, cast
-from glidergun._literals import DataType, EstimatorType
+from typing import (TYPE_CHECKING, Any, Callable, Generic, Protocol, TypeVar,
+                    Union, cast)
+
+import numpy as np
+
+from glidergun._literals import DataType, PredictorType
 
 if TYPE_CHECKING:
     from glidergun._grid import Grid
 
 
-class Estimator(Protocol):
+class Predictor(Protocol):
     fit: Callable
+    score: Callable
     predict: Callable
 
 
-TEstimator = TypeVar("TEstimator", bound=Estimator)
+TPredictor = TypeVar("TPredictor", bound=Predictor)
 
 
 @dataclass(frozen=True)
-class Estimation:
-    def fit(self, model: Union[TEstimator, EstimatorType], *explanatory_grids: "Grid", **kwargs: Any):
+class Prediction:
+    def fit(self, model: Union[TPredictor, PredictorType], *explanatory_grids: "Grid", **kwargs: Any):
         if model == "linear_regression":
             from sklearn.linear_model import LinearRegression
             actual_model = LinearRegression()
@@ -34,18 +38,17 @@ class Estimation:
         elif model == "random_forest_regression":
             from sklearn.ensemble import RandomForestRegressor
             actual_model = RandomForestRegressor()
+        elif isinstance(model, str):
+            raise ValueError(f"'{model}' is not a supported model.")
         else:
             actual_model = model
 
-        if isinstance(actual_model, str):
-            raise ValueError(f"'{actual_model}' is not a supported estimator.")
-
-        return GridEstimator(actual_model).fit(cast("Grid", self), *explanatory_grids, **kwargs)
+        return GridPredictor(actual_model).fit(cast("Grid", self), *explanatory_grids, **kwargs)
 
 
-class GridEstimator(Generic[TEstimator]):
-    def __init__(self, model: TEstimator) -> None:
-        self.model: TEstimator = model
+class GridPredictor(Generic[TPredictor]):
+    def __init__(self, model: TPredictor) -> None:
+        self.model: TPredictor = model
         self._dtype: DataType = "float32"
 
     def fit(self, dependent_grid: "Grid", *explanatory_grids: "Grid", **kwargs: Any):
@@ -58,14 +61,12 @@ class GridEstimator(Generic[TEstimator]):
         self._dtype = dependent_grid.dtype
         return self
 
-    def score(self, dependent_grid: "Grid", *explanatory_grids: "Grid") -> Optional[float]:
-        score = getattr(self.model, "score", None)
-        if score:
-            head, *tail = self._flatten(dependent_grid, *explanatory_grids)
-            return score(
-                np.array([g.data.ravel() for g in tail]).transpose(
-                    1, 0), head.data.ravel()
-            )
+    def score(self, dependent_grid: "Grid", *explanatory_grids: "Grid") -> float:
+        head, *tail = self._flatten(dependent_grid, *explanatory_grids)
+        return self.model.score(
+            np.array([g.data.ravel() for g in tail]).transpose(
+                1, 0), head.data.ravel()
+        )
 
     def predict(self, *explanatory_grids: "Grid", **kwargs: Any) -> "Grid":
         grids = self._flatten(*explanatory_grids)
@@ -85,8 +86,8 @@ class GridEstimator(Generic[TEstimator]):
     @classmethod
     def load(cls, file: str):
         with open(file, "rb") as f:
-            return GridEstimator(pickle.load(f))
+            return GridPredictor(pickle.load(f))
 
 
-def load_model(file: str) -> GridEstimator[Any]:
-    return GridEstimator.load(file)
+def load_model(file: str) -> GridPredictor[Any]:
+    return GridPredictor.load(file)

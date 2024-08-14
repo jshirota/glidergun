@@ -1,8 +1,9 @@
-import numpy as np
 import re
-from numpy import ndarray
 from pathlib import Path
 from typing import Union
+
+import numpy as np
+from numpy import ndarray
 from rasterio.crs import CRS
 
 

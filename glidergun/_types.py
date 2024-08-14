@@ -1,8 +1,9 @@
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol
+
 from numpy import ndarray
 from rasterio.crs import CRS
 from rasterio.transform import Affine
-from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol
 
 if TYPE_CHECKING:
     from glidergun._grid import Grid
@@ -37,10 +38,14 @@ class CellSize(NamedTuple):
     x: float
     y: float
 
-    def __mul__(self, n: float):
+    def __mul__(self, n: object):
+        if not isinstance(n, (float, int)):
+            return NotImplemented
         return CellSize(self.x * n, self.y * n)
 
-    def __rmul__(self, n: float):
+    def __rmul__(self, n: object):
+        if not isinstance(n, (float, int)):
+            return NotImplemented
         return CellSize(self.x * n, self.y * n)
 
     def __truediv__(self, n: float):

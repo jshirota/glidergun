@@ -1,13 +1,16 @@
 import dataclasses
-import rasterio
 from dataclasses import dataclass
+from typing import Any, Callable, List, Optional, Tuple, Union, overload
+
+import rasterio
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
-from typing import Any, Callable, List, Optional, Tuple, Union, overload
+
 from glidergun._functions import pca
-from glidergun._grid import CellSize, Extent, Grid, Scaler, _metadata, _read, con, standardize
+from glidergun._grid import (CellSize, Extent, Grid, Scaler, _metadata, _read,
+                             con, standardize)
 from glidergun._literals import BaseMap, DataType
 from glidergun._utils import create_parent_directory, get_crs, get_nodata_value
 
@@ -133,12 +136,16 @@ class Stack:
 
     __rge__ = __le__
 
-    def __eq__(self, n: Operand):
+    def __eq__(self, n: object):
+        if not isinstance(n, (Grid, float, int)):
+            return NotImplemented
         return self._apply(n, lambda g, n: g.__eq__(n))
 
     __req__ = __eq__
 
-    def __ne__(self, n: Operand):
+    def __ne__(self, n: object):
+        if not isinstance(n, (Grid, float, int)):
+            return NotImplemented
         return self._apply(n, lambda g, n: g.__ne__(n))
 
     __rne__ = __ne__
@@ -264,7 +271,7 @@ class Stack:
     ) -> None: ...
 
     @overload
-    def save(
+    def save(  # type: ignore
         self, file: MemoryFile, dtype: Optional[DataType] = None, driver: str = ""
     ) -> None: ...
 
@@ -329,7 +336,7 @@ def stack(*grids: str) -> Stack:
 
 
 @overload
-def stack(*grids: MemoryFile) -> Stack:
+def stack(*grids: MemoryFile) -> Stack:  # type: ignore
     """Creates a new stack from in-memory files.
 
     Args:

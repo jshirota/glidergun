@@ -4,6 +4,9 @@
 pip install glidergun
 ```
 
+![SRTM](srtm.png)
+
+
 ## creation / io
 
 - grid
