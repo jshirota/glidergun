@@ -1,27 +1,15 @@
 import dataclasses
-from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple, Union, overload
-
 import rasterio
+from dataclasses import dataclass
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
-
-from glidergun._grid import (
-    CellSize,
-    Extent,
-    Grid,
-    Scaler,
-    _metadata,
-    _nodata,
-    _read,
-    con,
-    pca,
-    standardize,
-)
+from typing import Any, Callable, List, Optional, Tuple, Union, overload
+from glidergun._functions import pca
+from glidergun._grid import CellSize, Extent, Grid, Scaler, _metadata, _read, con, standardize
 from glidergun._literals import BaseMap, DataType
-from glidergun._utils import create_parent_directory
+from glidergun._utils import create_parent_directory, get_crs, get_nodata_value
 
 Operand = Union["Stack", Grid, float, int]
 
@@ -218,7 +206,6 @@ class Stack:
         **kwargs,
     ):
         from glidergun._ipython import _map
-
         return _map(
             self,
             rgb,
@@ -234,6 +221,9 @@ class Stack:
     def each(self, func: Callable[[Grid], Grid]):
         return stack(*map(func, self.grids))
 
+    def georeference(self, xmin: float, ymin: float, xmax: float, ymax: float, crs: Union[int, CRS] = 4326):
+        return self.each(lambda g: g.georeference(xmin, ymin, xmax, ymax, crs))
+
     def clip(self, xmin: float, ymin: float, xmax: float, ymax: float):
         return self.each(lambda g: g.clip(xmin, ymin, xmax, ymax))
 
@@ -243,11 +233,8 @@ class Stack:
     def pca(self, n_components: int = 3):
         return stack(*pca(n_components, *self.grids))
 
-    def project(
-        self, epsg: Union[int, CRS], resampling: Resampling = Resampling.nearest
-    ):
-        crs = CRS.from_epsg(epsg) if isinstance(epsg, int) else epsg
-        if crs.wkt == self.crs.wkt:
+    def project(self, crs: Union[int, CRS], resampling: Resampling = Resampling.nearest):
+        if get_crs(crs).wkt == self.crs.wkt:
             return self
         return self.each(lambda g: g.project(crs, resampling))
 
@@ -295,10 +282,10 @@ class Stack:
             if dtype is None:
                 dtype = self.dtype
 
-        nodata = _nodata(dtype)
+        nodata = get_nodata_value(dtype)
 
         if nodata is not None:
-            grids = tuple(con(g.is_nan(), nodata, g) for g in grids)
+            grids = tuple(con(g.is_nan(), float(nodata), g) for g in grids)
 
         if isinstance(file, str):
             create_parent_directory(file)
@@ -379,6 +366,7 @@ def stack(*grids) -> Stack:
             ) as dataset:
                 for index in dataset.indexes:
                     band = _read(dataset, index, None)
+                    assert band
                     bands.append(band)
 
     return Stack(standardize(*bands))

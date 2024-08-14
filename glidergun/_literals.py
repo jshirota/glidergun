@@ -102,6 +102,13 @@ DataType = Literal[
     "uint32",
 ]
 
+EstimatorType = Literal[
+    "linear_regression",
+    "polynomial_regression",
+    "random_forest_classifier",
+    "random_forest_regression",
+]
+
 ExtentResolution = Literal[
     "first",
     "intersect",
