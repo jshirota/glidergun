@@ -9,8 +9,16 @@ from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
 
 from glidergun._functions import pca
-from glidergun._grid import (CellSize, Extent, Grid, Scaler, _metadata, _read,
-                             con, standardize)
+from glidergun._grid import (
+    CellSize,
+    Extent,
+    Grid,
+    Scaler,
+    _metadata,
+    _read,
+    con,
+    standardize,
+)
 from glidergun._literals import BaseMap, DataType
 from glidergun._utils import create_parent_directory, get_crs, get_nodata_value
 
@@ -213,6 +221,7 @@ class Stack:
         **kwargs,
     ):
         from glidergun._ipython import _map
+
         return _map(
             self,
             rgb,
@@ -228,7 +237,14 @@ class Stack:
     def each(self, func: Callable[[Grid], Grid]):
         return stack(*map(func, self.grids))
 
-    def georeference(self, xmin: float, ymin: float, xmax: float, ymax: float, crs: Union[int, CRS] = 4326):
+    def georeference(
+        self,
+        xmin: float,
+        ymin: float,
+        xmax: float,
+        ymax: float,
+        crs: Union[int, CRS] = 4326,
+    ):
         return self.each(lambda g: g.georeference(xmin, ymin, xmax, ymax, crs))
 
     def clip(self, xmin: float, ymin: float, xmax: float, ymax: float):
@@ -240,7 +256,9 @@ class Stack:
     def pca(self, n_components: int = 3):
         return stack(*pca(n_components, *self.grids))
 
-    def project(self, crs: Union[int, CRS], resampling: Resampling = Resampling.nearest):
+    def project(
+        self, crs: Union[int, CRS], resampling: Resampling = Resampling.nearest
+    ):
         if get_crs(crs).wkt == self.crs.wkt:
             return self
         return self.each(lambda g: g.project(crs, resampling))
