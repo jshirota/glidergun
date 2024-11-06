@@ -1,16 +1,24 @@
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple, Union, overload
+from typing import Any, Callable, Iterator, List, Optional, Tuple, Union, overload
 
 import rasterio
+from rasterio import DatasetReader
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
 
 from glidergun._functions import pca
-from glidergun._grid import (CellSize, Extent, Grid, Scaler, _metadata, _read,
-                             con, standardize)
+from glidergun._grid import (
+    Extent,
+    Grid,
+    Scaler,
+    _metadata,
+    _read,
+    con,
+    standardize,
+)
 from glidergun._literals import BaseMap, DataType
 from glidergun._utils import create_parent_directory, get_crs, get_nodata_value
 
@@ -24,29 +32,11 @@ class Stack:
 
     def __repr__(self):
         g = self.grids[0]
-        return (
-            f"image: {g.width}x{g.height} {g.dtype} | "
-            + f"crs: {g.crs} | "
-            + f"cell: {g.cell_size.x}, {g.cell_size.y} | "
-            + f"count: {len(self.grids)} | "
-            + f"rgb: {self._rgb}"
-        )
+        return f"crs: {g.crs} | count: {len(self.grids)} | rgb: {self._rgb}"
 
     @property
     def crs(self) -> CRS:
         return self.grids[0].crs
-
-    @property
-    def width(self) -> int:
-        return self.grids[0].width
-
-    @property
-    def height(self) -> int:
-        return self.grids[0].height
-
-    @property
-    def dtype(self) -> DataType:
-        return self.grids[0].dtype
 
     @property
     def xmin(self) -> float:
@@ -63,10 +53,6 @@ class Stack:
     @property
     def ymax(self) -> float:
         return self.grids[0].ymax
-
-    @property
-    def cell_size(self) -> CellSize:
-        return self.grids[0].cell_size
 
     @property
     def extent(self) -> Extent:
@@ -212,7 +198,8 @@ class Stack:
         grayscale: bool = True,
         **kwargs,
     ):
-        from glidergun._ipython import _map
+        from glidergun._display import _map
+
         return _map(
             self,
             rgb,
@@ -228,7 +215,14 @@ class Stack:
     def each(self, func: Callable[[Grid], Grid]):
         return stack(*map(func, self.grids))
 
-    def georeference(self, xmin: float, ymin: float, xmax: float, ymax: float, crs: Union[int, CRS] = 4326):
+    def georeference(
+        self,
+        xmin: float,
+        ymin: float,
+        xmax: float,
+        ymax: float,
+        crs: Union[int, CRS] = 4326,
+    ):
         return self.each(lambda g: g.georeference(xmin, ymin, xmax, ymax, crs))
 
     def clip(self, xmin: float, ymin: float, xmax: float, ymax: float):
@@ -240,7 +234,9 @@ class Stack:
     def pca(self, n_components: int = 3):
         return stack(*pca(n_components, *self.grids))
 
-    def project(self, crs: Union[int, CRS], resampling: Resampling = Resampling.nearest):
+    def project(
+        self, crs: Union[int, CRS], resampling: Resampling = Resampling.nearest
+    ):
         if get_crs(crs).wkt == self.crs.wkt:
             return self
         return self.each(lambda g: g.project(crs, resampling))
@@ -287,7 +283,7 @@ class Stack:
         else:
             grids = self.grids
             if dtype is None:
-                dtype = self.dtype
+                dtype = grids[0].dtype
 
         nodata = get_nodata_value(dtype)
 
@@ -323,11 +319,24 @@ class Stack:
 
 
 @overload
+def stack(*grids: rasterio.DatasetReader) -> Stack:
+    """Creates a new stack from data readers.
+
+    Args:
+        grids: Data readers.
+
+    Returns:
+        Stack: A new stack.
+    """
+    ...
+
+
+@overload
 def stack(*grids: str) -> Stack:
     """Creates a new stack from file paths.
 
     Args:
-        grids (str): File paths.
+        grids: File paths.
 
     Returns:
         Stack: A new stack.
@@ -337,10 +346,10 @@ def stack(*grids: str) -> Stack:
 
 @overload
 def stack(*grids: MemoryFile) -> Stack:  # type: ignore
-    """Creates a new stack from in-memory files.
+    """Creates a new stack from memory files.
 
     Args:
-        grids (str): Rasterio in-memory files.
+        grids: Memory files.
 
     Returns:
         Stack: A new stack.
@@ -353,7 +362,7 @@ def stack(*grids: Grid) -> Stack:
     """Creates a new stack from grids.
 
     Args:
-        grids (str): Grids.
+        grids: Grids.
 
     Returns:
         Stack: A new stack.
@@ -365,15 +374,35 @@ def stack(*grids) -> Stack:
     bands: List[Grid] = []
 
     for grid in grids:
-        if isinstance(grid, Grid):
+        if isinstance(grid, DatasetReader):
+            bands.extend(_read_grids(grid))
+        elif isinstance(grid, str):
+            with rasterio.open(grid) as dataset:
+                bands.extend(_read_grids(dataset))
+        elif isinstance(grid, MemoryFile):
+            with grid.open() as dataset:
+                bands.extend(_read_grids(dataset))
+        elif isinstance(grid, Grid):
             bands.append(grid)
-        else:
-            with (
-                rasterio.open(grid) if isinstance(grid, str) else grid.open()
-            ) as dataset:
-                for index in dataset.indexes:
-                    band = _read(dataset, index, None)
-                    assert band
-                    bands.append(band)
 
-    return Stack(standardize(*bands))
+    crs = set(g.crs for g in bands)
+    if len(crs) > 1:
+        raise ValueError("All grids must have the same CRS.")
+
+    extent = set(g.extent for g in bands)
+    if len(extent) > 1:
+        raise ValueError("All grids must have the same extent.")
+
+    return Stack(tuple(bands))
+
+
+def _read_grids(dataset) -> Iterator[Grid]:
+    if dataset.subdatasets:
+        for index, _ in enumerate(dataset.subdatasets):
+            with rasterio.open(dataset.subdatasets[index - 1]) as subdataset:
+                yield from _read_grids(subdataset)
+    elif dataset.indexes:
+        for index in dataset.indexes:
+            grid = _read(dataset, index, None)
+            if grid:
+                yield grid

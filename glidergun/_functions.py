@@ -1,12 +1,14 @@
-
 from typing import Any, Callable, Iterable, Optional, Tuple, Union
 
 import numpy as np
 from numpy import ndarray
 from rasterio.crs import CRS
 from rasterio.transform import Affine
-from scipy.interpolate import (LinearNDInterpolator, NearestNDInterpolator,
-                               RBFInterpolator)
+from scipy.interpolate import (
+    LinearNDInterpolator,
+    NearestNDInterpolator,
+    RBFInterpolator,
+)
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
@@ -174,14 +176,12 @@ def maximum(*grids: Grid) -> Grid:
 
 
 def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
-    grids_adjusted = [con(g.is_nan(), float(g.mean), g)
-                      for g in standardize(*grids)]
+    grids_adjusted = [con(g.is_nan(), float(g.mean), g) for g in standardize(*grids)]
     arrays = (
         PCA(n_components=n_components)
         .fit_transform(
             np.array(
-                [g.scale(StandardScaler()).data.ravel()
-                 for g in grids_adjusted]
+                [g.scale(StandardScaler()).data.ravel() for g in grids_adjusted]
             ).transpose((1, 0))
         )
         .transpose((1, 0))

@@ -1,8 +1,17 @@
-# flake8: noqa
-import glidergun._ipython
-from glidergun._functions import (create, distance, interp_linear,
-                                  interp_nearest, interp_rbf, maximum, mean,
-                                  minimum, pca, std)
+# ruff: noqa: F401
+from glidergun._display import animate
+from glidergun._functions import (
+    create,
+    distance,
+    interp_linear,
+    interp_nearest,
+    interp_rbf,
+    maximum,
+    mean,
+    minimum,
+    pca,
+    std,
+)
 from glidergun._grid import Grid, con, grid, standardize
 from glidergun._literals import BaseMap, ColorMap, DataType, ResamplingMethod
 from glidergun._mosaic import Mosaic, mosaic

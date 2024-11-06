@@ -2,15 +2,14 @@ import dataclasses
 import hashlib
 from dataclasses import dataclass
 from functools import cached_property
-from typing import (Any, Callable, Dict, Iterable, Optional, Tuple, Union,
-                    cast, overload)
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union, cast, overload
 
 import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
 import scipy as sp
 from numpy import arctan, arctan2, cos, gradient, ndarray, pi, sin, sqrt
-from rasterio import features
+from rasterio import DatasetReader, features
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
@@ -21,12 +20,21 @@ from shapely import Polygon
 from sklearn.preprocessing import QuantileTransformer
 
 from glidergun._focal import Focal
-from glidergun._literals import (BaseMap, ColorMap, DataType, ExtentResolution,
-                                 ResamplingMethod)
+from glidergun._literals import (
+    BaseMap,
+    ColorMap,
+    DataType,
+    ExtentResolution,
+    ResamplingMethod,
+)
 from glidergun._prediction import Prediction
 from glidergun._types import CellSize, Extent, GridCore, Point, Scaler
-from glidergun._utils import (create_parent_directory, format_type, get_crs,
-                              get_nodata_value)
+from glidergun._utils import (
+    create_parent_directory,
+    format_type,
+    get_crs,
+    get_nodata_value,
+)
 from glidergun._zonal import Zonal
 
 Operand = Union["Grid", float, int]
@@ -120,7 +128,7 @@ class Grid(GridCore, Prediction, Focal, Zonal):
 
     @cached_property
     def md5(self) -> str:
-        return hashlib.md5(self.data.copy(order="C")).hexdigest()
+        return hashlib.md5(self.data.copy(order="C")).hexdigest()  # type: ignore
 
     def __add__(self, n: Operand):
         return self._apply(self, n, np.add)
@@ -254,8 +262,7 @@ class Grid(GridCore, Prediction, Focal, Zonal):
 
     def con(self, trueValue: Operand, falseValue: Operand):
         return self.local(
-            lambda data: np.where(data, self._data(
-                trueValue), self._data(falseValue))
+            lambda data: np.where(data, self._data(trueValue), self._data(falseValue))
         )
 
     def mosaic(self, *grids: "Grid"):
@@ -308,8 +315,7 @@ class Grid(GridCore, Prediction, Focal, Zonal):
 
     def gaussian_gradient_magnitude(self, sigma: float, **kwargs):
         return self.local(
-            lambda a: sp.ndimage.gaussian_gradient_magnitude(
-                a, sigma, **kwargs)
+            lambda a: sp.ndimage.gaussian_gradient_magnitude(a, sigma, **kwargs)
         )
 
     def gaussian_laplace(self, sigma: float, **kwargs):
@@ -327,7 +333,14 @@ class Grid(GridCore, Prediction, Focal, Zonal):
     def uniform_filter1d(self, size: float, **kwargs):
         return self.local(lambda a: sp.ndimage.uniform_filter1d(a, size, **kwargs))
 
-    def georeference(self, xmin: float, ymin: float, xmax: float, ymax: float, crs: Union[int, CRS] = 4326):
+    def georeference(
+        self,
+        xmin: float,
+        ymin: float,
+        xmax: float,
+        ymax: float,
+        crs: Union[int, CRS] = 4326,
+    ):
         return grid(self.data, (xmin, ymin, xmax, ymax), crs)
 
     def _reproject(
@@ -350,8 +363,7 @@ class Grid(GridCore, Prediction, Focal, Zonal):
             dst_crs=crs,
             dst_nodata=self.nodata,
             resampling=(
-                Resampling[resampling] if isinstance(
-                    resampling, str) else resampling
+                Resampling[resampling] if isinstance(resampling, str) else resampling
             ),
         )
         result = grid(destination, transform, crs)
@@ -374,8 +386,7 @@ class Grid(GridCore, Prediction, Focal, Zonal):
             crs,
             width,
             height,
-            Resampling[resampling] if isinstance(
-                resampling, str) else resampling,
+            Resampling[resampling] if isinstance(resampling, str) else resampling,
         )
 
     def _resample(
@@ -399,7 +410,9 @@ class Grid(GridCore, Prediction, Focal, Zonal):
         return self._reproject(transform, self.crs, width, height, resampling)
 
     def clip(self, xmin: float, ymin: float, xmax: float, ymax: float):
-        return self._resample((xmin, ymin, xmax, ymax), self.cell_size, Resampling.nearest)
+        return self._resample(
+            (xmin, ymin, xmax, ymax), self.cell_size, Resampling.nearest
+        )
 
     def resample(
         self,
@@ -423,6 +436,7 @@ class Grid(GridCore, Prediction, Focal, Zonal):
 
     def distance(self, *points: Tuple[float, float]):
         from glidergun._functions import distance
+
         if not points:
             points = tuple((p.x, p.y) for p in self.to_points() if p.value)
         return distance(self.extent, self.crs, self.cell_size, *points)
@@ -548,9 +562,10 @@ class Grid(GridCore, Prediction, Focal, Zonal):
 
     def to_stack(self, cmap: Union[ColorMap, Any]):
         from glidergun._stack import stack
+
         grid1 = self - self.min
         grid2 = grid1 / grid1.max
-        arrays = plt.get_cmap(cmap)(grid2.data).transpose(2, 0, 1)[:3]
+        arrays = plt.get_cmap(cmap)(grid2.data).transpose(2, 0, 1)[:3]  # type: ignore
         mask = self.is_nan()
         r, g, b = [self.update(a * 253 + 1).set_nan(mask) for a in arrays]
         return stack(r, g, b)
@@ -610,7 +625,8 @@ class Grid(GridCore, Prediction, Focal, Zonal):
         grayscale: bool = True,
         **kwargs,
     ):
-        from glidergun._ipython import _map
+        from glidergun._display import _map
+
         return _map(
             self,
             cmap,
@@ -687,102 +703,131 @@ class Grid(GridCore, Prediction, Focal, Zonal):
 
 @overload
 def grid(
-    data: str,
-) -> Grid: ...
-
-
-@overload
-def grid(
-    data: str,
-    extent: Tuple[float, float, float, float],
-) -> Grid: ...
-
-
-@overload
-def grid(
-    data: str,
-    extent: Tuple[float, float, float, float],
-    crs: Union[int, CRS, None] = None,
-    index: int = 1,
-) -> Grid: ...
-
-
-@overload
-def grid(  # type: ignore
-    data: MemoryFile,
-) -> Grid: ...
-
-
-@overload
-def grid(  # type: ignore
-    data: MemoryFile,
-    extent: Tuple[float, float, float, float],
-) -> Grid: ...
-
-
-@overload
-def grid(  # type: ignore
-    data: MemoryFile,
-    extent: Tuple[float, float, float, float],
-    crs: Union[int, CRS, None] = None,
-    index: int = 1,
-) -> Grid: ...
-
-
-@overload
-def grid(
-    data: ndarray,
-    extent: Tuple[float, float, float, float],
-    crs: Union[int, CRS],
-) -> Grid: ...
-
-
-@ overload
-def grid(
-    data: ndarray,
-    extent: Affine,
-    crs: CRS,
-) -> Grid: ...
-
-
-def grid(
-    data: Union[str, MemoryFile, ndarray],
-    extent: Union[Tuple[float, float, float, float], Affine, None] = None,
+    data: DatasetReader,
+    extent: Optional[Tuple[float, float, float, float]] = None,
     crs: Union[int, CRS, None] = None,
     index: int = 1,
 ) -> Grid:
-    """Creates new grid.
+    """Creates a new grid from data reader.
 
     Args:
-        data (Union[str, MemoryFile, ndarray]): File path, memory file or ndarray.
-        extent (Union[Tuple[float, float, float, float], Affine, None], optional):
-            Map extent used to clip the raster.  If the input data is an ndarray,
-            this is used to define the map extent.  Defaults to None.
-        crs (Union[int, CRS, None], optional): CRS or an EPSG code (e.g. 4326).
-            Defaults to None.
+        data: Data reader.
+        extent: Map extent used to clip the raster.
+        crs: CRS or an EPSG code (e.g. 4326).
         index (int, optional): Band index.  Defaults to 1.
-
-    Raises:
-        ValueError: Indicating ivalid file path, etc.
 
     Returns:
         Grid: A new grid.
     """
+    ...
+
+
+@overload
+def grid(
+    data: str,
+    extent: Optional[Tuple[float, float, float, float]] = None,
+    crs: Union[int, CRS, None] = None,
+    index: int = 1,
+) -> Grid:
+    """Creates a new grid from the file path.
+
+    Args:
+        data: File path.
+        extent: Map extent used to clip the raster.
+        crs: CRS or an EPSG code (e.g. 4326).
+        index (int, optional): Band index.  Defaults to 1.
+
+    Returns:
+        Grid: A new grid.
+    """
+    ...
+
+
+@overload
+def grid(  # type: ignore
+    data: MemoryFile,
+    extent: Optional[Tuple[float, float, float, float]] = None,
+    crs: Union[int, CRS, None] = None,
+    index: int = 1,
+) -> Grid:
+    """Creates a new grid from a memory file.
+
+    Args:
+        data: Memory file.
+        extent: Map extent used to clip the raster.
+        crs: CRS or an EPSG code (e.g. 4326).
+        index (int, optional): Band index.  Defaults to 1.
+
+    Returns:
+        Grid: A new grid.
+    """
+    ...
+
+
+@overload
+def grid(
+    data: ndarray,
+    extent: Union[Tuple[float, float, float, float], Affine, None] = None,
+    crs: Union[int, CRS, None] = None,
+) -> Grid:
+    """Creates a new grid from an array.
+
+    Args:
+        data: Array.
+        extent: Map extent used to clip the raster.
+        crs: CRS or an EPSG code (e.g. 4326) used to define the map extent.  Defaults to 4326.
+
+    Returns:
+        Grid: A new grid.
+    """
+    ...
+
+
+@overload
+def grid(
+    data: Tuple[int, int],
+    extent: Union[Tuple[float, float, float, float], Affine, None] = None,
+    crs: Union[int, CRS, None] = None,
+) -> Grid:
+    """Creates a new grid from a tuple (width, height).
+
+    Args:
+        data: Tuple (width, height).
+        extent: Map extent used to clip the raster.
+        crs: CRS or an EPSG code (e.g. 4326) used to define the map extent.  Defaults to 4326.
+
+    Returns:
+        Grid: A new grid.
+    """
+    ...
+
+
+def grid(
+    data: Union[DatasetReader, str, MemoryFile, ndarray, Tuple[int, int]],
+    extent: Union[Tuple[float, float, float, float], Affine, None] = None,
+    crs: Union[int, CRS, None] = None,
+    index: int = 1,
+) -> Grid:
+    if isinstance(data, DatasetReader):
+        return _read(data, index, extent)  # type: ignore
     if isinstance(data, str):
         with rasterio.open(data) as dataset:
-            g = _read(dataset, index, extent)
-    elif isinstance(data, MemoryFile):
+            return _read(dataset, index, extent)  # type: ignore
+    if isinstance(data, MemoryFile):
         with data.open() as dataset:
-            g = _read(dataset, index, extent)
-    elif isinstance(data, ndarray):
-        if isinstance(extent, Affine):
-            transform = extent
-        elif extent:
-            transform = from_bounds(*extent, data.shape[1], data.shape[0])
-        g = Grid(format_type(data), transform, get_crs(crs))  # type: ignore
-    if g:
-        return g
-    raise ValueError()
+            return _read(dataset, index, extent)  # type: ignore
+    if isinstance(data, tuple):
+        w, h = data
+        array = np.arange(w * h).reshape(h, w)
+    else:
+        array = data
+    if isinstance(extent, Affine):
+        transform = extent
+    else:
+        transform = from_bounds(
+            *(extent or (0, 1, 0, 1)), array.shape[1], array.shape[0]
+        )
+    return Grid(format_type(array), transform, get_crs(crs or 4326))  # type: ignore
 
 
 def _read(dataset, index, extent) -> Optional[Grid]:

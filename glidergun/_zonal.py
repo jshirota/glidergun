@@ -16,10 +16,10 @@ class Zonal:
         zone_grid = zone_grid.type("int32")
         result = self
         for zone in set(zone_grid.data[np.isfinite(zone_grid.data)]):
-            data = g.set_nan(zone_grid != zone).data
+            zone_value = int(zone)
+            data = g.set_nan(zone_grid != zone_value).data
             statistics = func(data[np.isfinite(data)])
-            result = (zone_grid == zone).con(
-                statistics, result)
+            result = (zone_grid == zone_value).con(statistics, result)  # type: ignore
         return result
 
     def zonal_count(self, value: Union[float, int], zone_grid: "Grid", **kwargs):
@@ -107,4 +107,6 @@ class Zonal:
         return self.zonal(lambda a: sp.stats.variation(a, **kwargs), zone_grid)
 
     def zonal_median_abs_deviation(self, zone_grid: "Grid", **kwargs):
-        return self.zonal(lambda a: sp.stats.median_abs_deviation(a, **kwargs), zone_grid)
+        return self.zonal(
+            lambda a: sp.stats.median_abs_deviation(a, **kwargs), zone_grid
+        )

@@ -5,8 +5,7 @@ import numpy as np
 import pytest
 import rasterio
 
-from glidergun import (Grid, con, grid, interp_linear, interp_nearest,
-                       interp_rbf, mosaic)
+from glidergun import Grid, con, grid, interp_linear, interp_nearest, interp_rbf, mosaic
 
 dem = grid("./.data/n55_e008_1arc_v3.bil")
 
@@ -271,10 +270,8 @@ def test_op_sub():
 
 def test_op_combined():
     g = 2 * dem - dem / 2 - dem / 4
-    assert pytest.approx(g.min, 0.001) == 2 * dem.min - \
-        dem.min / 2 - dem.min / 4
-    assert pytest.approx(g.max, 0.001) == 2 * dem.max - \
-        dem.max / 2 - dem.max / 4
+    assert pytest.approx(g.min, 0.001) == 2 * dem.min - dem.min / 2 - dem.min / 4
+    assert pytest.approx(g.max, 0.001) == 2 * dem.max - dem.max / 2 - dem.max / 4
 
 
 def test_op_pow():
@@ -506,25 +503,21 @@ def test_mosaic_dataset():
         "./.data/n55_e008_1arc_v3.bil",
         "./.data/n55_e009_1arc_v3.bil",
     )
-    assert m.clip(8, 55, 9, 56).extent == pytest.approx(
-        (8, 55, 9, 56), 0.001)
-    assert m.clip(8, 55, 10, 56).extent == pytest.approx(
-        (8, 55, 10, 56), 0.001)
+    assert m.clip(8, 55, 9, 56).extent == pytest.approx((8, 55, 9, 56), 0.001)
+    assert m.clip(8, 55, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
     assert m.clip(8.2, 55.2, 9.2, 56.2).extent == pytest.approx(
-        (8.2, 55.2, 9.2, 56.0), 0.001)
-    assert m.clip(7.5, 55, 10, 56).extent == pytest.approx(
-        (8, 55, 10, 56), 0.001)
-    assert m.clip(8, 50, 10, 56).extent == pytest.approx(
-        (8, 55, 10, 56), 0.001)
-    assert m.clip(8, 55, 15, 56).extent == pytest.approx(
-        (8, 55, 10, 56), 0.001)
-    assert m.clip(8, 55, 10, 60).extent == pytest.approx(
-        (8, 55, 10, 56), 0.001)
+        (8.2, 55.2, 9.2, 56.0), 0.001
+    )
+    assert m.clip(7.5, 55, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
+    assert m.clip(8, 50, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
+    assert m.clip(8, 55, 15, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
+    assert m.clip(8, 55, 10, 60).extent == pytest.approx((8, 55, 10, 56), 0.001)
 
 
 def test_mosaic_eager_vs_lazy():
-    g = mosaic(grid("./.data/n55_e008_1arc_v3.bil"),
-               grid("./.data/n55_e009_1arc_v3.bil"))
+    g = mosaic(
+        grid("./.data/n55_e008_1arc_v3.bil"), grid("./.data/n55_e009_1arc_v3.bil")
+    )
     m = mosaic("./.data/n55_e008_1arc_v3.bil", "./.data/n55_e009_1arc_v3.bil")
 
     assert g.clip(8, 55, 8.5, 56).md5 == m.clip(8, 55, 8.5, 56).md5

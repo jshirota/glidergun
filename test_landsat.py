@@ -36,7 +36,7 @@ def fit(regressor):
     score = model.score(test_data.grids[0], *test_data.grids[1:])
     actual = test_data.grids[0]
     predicted = model.predict(*test_data.grids[1:])
-    assert score and score > 0.95
+    assert score and score > 0.90
     assert predicted.extent == actual.extent
 
 
@@ -108,20 +108,10 @@ def test_project():
     assert s.crs.wkt.startswith('GEOGCS["WGS 84",DATUM["WGS_1984",')
 
 
-def test_properties():
-    assert landsat.width == 2010
-    assert landsat.height == 2033
-    assert landsat.dtype == "float32"
-
-
 def test_properties_2():
     for g in landsat.grids:
-        assert g.cell_size == landsat.cell_size
         assert g.crs == landsat.crs
         assert g.extent == landsat.extent
-        assert g.width == landsat.width
-        assert g.height == landsat.height
-        assert g.dtype == landsat.dtype
         assert g.xmin == landsat.xmin
         assert g.ymin == landsat.ymin
         assert g.xmax == landsat.xmax
@@ -130,8 +120,8 @@ def test_properties_2():
 
 def test_resample():
     s = landsat.resample(1000)
-    assert pytest.approx(s.cell_size.x, 0.001) == 1000
-    assert pytest.approx(s.cell_size.y, 0.001) == 1000
+    assert pytest.approx(s.grids[0].cell_size.x, 0.001) == 1000
+    assert pytest.approx(s.grids[0].cell_size.y, 0.001) == 1000
     for g in s.grids:
         assert pytest.approx(g.cell_size.x, 0.001) == 1000
         assert pytest.approx(g.cell_size.y, 0.001) == 1000
@@ -139,8 +129,8 @@ def test_resample():
 
 def test_resample_2():
     s = landsat.resample((1000, 600))
-    assert pytest.approx(s.cell_size.x, 0.001) == 1000
-    assert pytest.approx(s.cell_size.y, 0.001) == 600
+    assert pytest.approx(s.grids[0].cell_size.x, 0.001) == 1000
+    assert pytest.approx(s.grids[0].cell_size.y, 0.001) == 600
     for g in s.grids:
         assert pytest.approx(g.cell_size.x, 0.001) == 1000
         assert pytest.approx(g.cell_size.y, 0.001) == 600

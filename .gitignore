@@ -1,5 +1,12 @@
+# Python-generated files
 __pycache__/
+*.py[oc]
+build/
 dist/
-glidergun.egg-info/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
 .output/
-test.ipynb
