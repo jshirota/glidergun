@@ -1,12 +1,9 @@
 {
-    "flake8.args": [
-        "--max-line-length=120",
-        "--ignore=E704,F403,F405,I001,I005,W503"
-    ],
     "python.analysis.typeCheckingMode": "standard",
-    "python.testing.pytestEnabled": true,
+    "python.defaultInterpreterPath": ".venv",
     "python.testing.pytestArgs": [
         "."
     ],
+    "python.testing.pytestEnabled": true,
     "python.testing.unittestEnabled": false
 }

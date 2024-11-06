@@ -18,17 +18,20 @@ class Mosaic:
                 pass
 
     @overload
-    def clip(self, xmin: float, ymin: float, xmax: float,
-             ymax: float, index: int = 1) -> Grid: ...
+    def clip(
+        self, xmin: float, ymin: float, xmax: float, ymax: float, index: int = 1
+    ) -> Grid: ...
 
     @overload
-    def clip(self, xmin: float, ymin: float, xmax: float,
-             ymax: float, index: Tuple[int, ...]) -> Stack: ...
+    def clip(
+        self, xmin: float, ymin: float, xmax: float, ymax: float, index: Tuple[int, ...]
+    ) -> Stack: ...
 
     def clip(self, xmin: float, ymin: float, xmax: float, ymax: float, index=None):
         if not index or isinstance(index, int):
-            grids: List[Grid] = [g for g in self._read(
-                (xmin, ymin, xmax, ymax), index or 1) if g]
+            grids: List[Grid] = [
+                g for g in self._read((xmin, ymin, xmax, ymax), index or 1) if g
+            ]
             return mosaic(*grids)
         return stack(*(self.clip(xmin, ymin, xmax, ymax, index=i) for i in index))
 
