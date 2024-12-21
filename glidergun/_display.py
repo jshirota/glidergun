@@ -155,3 +155,4 @@ if ipython := IPython.get_ipython():  # type: ignore
             else f"{items}"
         ),
     )
+    formatter.for_type(ArtistAnimation, lambda a: a.to_jshtml())

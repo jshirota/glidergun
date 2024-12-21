@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Zonal:
-    def zonal(self, func: Callable[[ndarray], Any], zone_grid: "Grid"):
+    def zonal(self, func: Callable[[ndarray], Any], zone_grid: "Grid") -> "Grid":
         g = cast("Grid", self)
         zone_grid = zone_grid.type("int32")
         result = self
@@ -20,7 +20,7 @@ class Zonal:
             data = g.set_nan(zone_grid != zone_value).data
             statistics = func(data[np.isfinite(data)])
             result = (zone_grid == zone_value).con(statistics, result)  # type: ignore
-        return result
+        return cast("Grid", result)
 
     def zonal_count(self, value: Union[float, int], zone_grid: "Grid", **kwargs):
         return self.zonal(lambda a: np.count_nonzero(a == value, **kwargs), zone_grid)

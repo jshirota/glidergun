@@ -825,7 +825,7 @@ def grid(
         transform = extent
     else:
         transform = from_bounds(
-            *(extent or (0, 1, 0, 1)), array.shape[1], array.shape[0]
+            *(extent or (0, 0, 1, 1)), array.shape[1], array.shape[0]
         )
     return Grid(format_type(array), transform, get_crs(crs or 4326))  # type: ignore
 
