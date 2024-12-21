@@ -1,8 +1,13 @@
 import dataclasses
+from base64 import b64encode
 from dataclasses import dataclass
+from functools import cached_property
+from io import BytesIO
 from typing import Any, Callable, Iterator, List, Optional, Tuple, Union, overload
 
+import numpy as np
 import rasterio
+from matplotlib import pyplot as plt
 from rasterio import DatasetReader
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
@@ -13,13 +18,13 @@ from glidergun._functions import pca
 from glidergun._grid import (
     Extent,
     Grid,
-    Scaler,
     _metadata,
     _read,
     con,
     standardize,
 )
 from glidergun._literals import BaseMap, DataType
+from glidergun._types import Scaler
 from glidergun._utils import create_parent_directory, get_crs, get_nodata_value
 
 Operand = Union["Stack", Grid, float, int]
@@ -28,11 +33,35 @@ Operand = Union["Stack", Grid, float, int]
 @dataclass(frozen=True)
 class Stack:
     grids: Tuple[Grid, ...]
-    _rgb: Tuple[int, int, int] = (1, 2, 3)
+    display: Tuple[int, int, int] = (1, 2, 3)
 
     def __repr__(self):
         g = self.grids[0]
-        return f"crs: {g.crs} | count: {len(self.grids)} | rgb: {self._rgb}"
+        return f"crs: {g.crs} | count: {len(self.grids)} | rgb: {self.display}"
+
+    def _thumbnail(self, figsize: Optional[Tuple[float, float]] = None):
+        with BytesIO() as buffer:
+            figure = plt.figure(figsize=figsize, frameon=False)
+            axes = figure.add_axes((0, 0, 1, 1))
+            axes.axis("off")
+            n = 4000 / max(self.grids[0].width, self.grids[0].height)
+            if n < 1:
+                obj = self.resample(self.grids[0].cell_size / n)
+            obj = self.to_uint8_range()
+            rgb = [
+                obj.grids[i - 1].data
+                for i in (self.display if self.display else (1, 2, 3))
+            ]
+            alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
+            plt.imshow(np.dstack([*[np.asanyarray(g, "uint8") for g in rgb], alpha]))
+            plt.savefig(buffer, bbox_inches="tight", pad_inches=0)
+            plt.close(figure)
+            return buffer.getvalue()
+
+    @cached_property
+    def img(self) -> str:
+        image = b64encode(self._thumbnail()).decode()
+        return f"data:image/png;base64, {image}"
 
     @property
     def crs(self) -> CRS:
@@ -175,7 +204,7 @@ class Stack:
             return self.zip_with(n, lambda g1, g2: op(g1, g2))
         return self.each(lambda g: op(g, n))
 
-    def scale(self, scaler: Optional[Scaler] = None, **fit_params):
+    def scale(self, scaler: Scaler, **fit_params):
         return self.each(lambda g: g.scale(scaler, **fit_params))
 
     def percent_clip(self, min_percent: float, max_percent: float):
@@ -184,12 +213,14 @@ class Stack:
     def to_uint8_range(self):
         return self.each(lambda g: g.to_uint8_range())
 
-    def plot(self, r: int, g: int, b: int):
-        return dataclasses.replace(self, _rgb=(r, g, b))
+    def color(self, rgb: Tuple[int, int, int]):
+        valid = set(range(1, len(self.grids) + 1))
+        if set(rgb) - valid:
+            raise ValueError("Invalid bands specified.")
+        return dataclasses.replace(self, display=rgb)
 
     def map(
         self,
-        rgb: Tuple[int, int, int] = (1, 2, 3),
         opacity: float = 1.0,
         basemap: Union[BaseMap, Any, None] = None,
         width: int = 800,
@@ -201,15 +232,7 @@ class Stack:
         from glidergun._display import _map
 
         return _map(
-            self,
-            rgb,
-            opacity,
-            basemap,
-            width,
-            height,
-            attribution,
-            grayscale,
-            **kwargs,
+            self, opacity, basemap, width, height, attribution, grayscale, **kwargs
         )
 
     def each(self, func: Callable[[Grid], Grid]):
@@ -278,7 +301,7 @@ class Stack:
             or file.lower().endswith(".kmz")
             or file.lower().endswith(".png")
         ):
-            grids = self.to_uint8_range().grids
+            grids = self.extract_bands(*self.display).to_uint8_range().grids
             dtype = "uint8"
         else:
             grids = self.grids
@@ -314,16 +337,13 @@ class Stack:
                 for index, grid in enumerate(grids):
                     dataset.write(grid.data, index + 1)
 
-    def save_plot(self, file):
-        self.extract_bands(*self._rgb).save(file)
-
 
 @overload
-def stack(*grids: rasterio.DatasetReader) -> Stack:
-    """Creates a new stack from data readers.
+def stack(*grids: str) -> Stack:
+    """Creates a new stack from file paths.
 
     Args:
-        grids: Data readers.
+        grids: File paths.
 
     Returns:
         Stack: A new stack.
@@ -332,11 +352,11 @@ def stack(*grids: rasterio.DatasetReader) -> Stack:
 
 
 @overload
-def stack(*grids: str) -> Stack:
-    """Creates a new stack from file paths.
+def stack(*grids: rasterio.DatasetReader) -> Stack:  # type: ignore
+    """Creates a new stack from data readers.
 
     Args:
-        grids: File paths.
+        grids: Data readers.
 
     Returns:
         Stack: A new stack.
@@ -399,7 +419,7 @@ def stack(*grids) -> Stack:
 def _read_grids(dataset) -> Iterator[Grid]:
     if dataset.subdatasets:
         for index, _ in enumerate(dataset.subdatasets):
-            with rasterio.open(dataset.subdatasets[index - 1]) as subdataset:
+            with rasterio.open(dataset.subdatasets[index]) as subdataset:
                 yield from _read_grids(subdataset)
     elif dataset.indexes:
         for index in dataset.indexes:

@@ -8,7 +8,7 @@ from sklearn.linear_model import Ridge
 from sklearn.neural_network import MLPRegressor
 from sklearn.tree import DecisionTreeRegressor
 
-from glidergun import Stack, stack
+from glidergun._stack import Stack, stack
 
 landsat = stack(
     ".data/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B1.TIF",
@@ -169,3 +169,10 @@ def test_save_jpg():
 
 def test_save_png():
     save(landsat.extract_bands(4, 3, 2), "test_stack.png", strict=False)
+
+
+def test_color():
+    l0 = landsat.color((4, 3, 2))
+    l1 = landsat.color((5, 4, 3))
+    assert l0.md5s == l1.md5s
+    assert len(l0.grids) == len(l1.grids) == 7

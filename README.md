@@ -54,12 +54,16 @@ def simulate(g):
     md5s = set()
     while g.md5 not in md5s:
         md5s.add(g.md5)
-        yield (g := tick(g))
+        yield -(g := tick(g))
 
 
-seed = grid((50, 50)).randomize() < 0.5
+seed = grid((120, 80)).randomize() < 0.5
 
-animate(simulate(seed)).save("game_of_life.gif")
+animation = animate(simulate(seed), interval=40)
+
+# animation.save("game_of_life.gif")
+
+animation
 ```
 
-![](game_of_life.gif)
+<img src="game_of_life.gif" width="600"/>

@@ -171,16 +171,6 @@ class Focal:
             circle,
         )
 
-    def focal_mode(
-        self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
-    ):
-        def f(a):
-            return sp.stats.mode(
-                a, **self._kwargs(ignore_nan, keepdims=True, **kwargs)
-            )[0].transpose(2, 0, 1)[0]
-
-        return self.focal(f, buffer, circle)
-
     def focal_moment(
         self, buffer: int = 1, circle: bool = False, ignore_nan: bool = True, **kwargs
     ):

@@ -1,11 +1,9 @@
 from base64 import b64encode
-from io import BytesIO
 from typing import Any, Iterable, Optional, Union
 
 import IPython
-from matplotlib.animation import ArtistAnimation
 import matplotlib.pyplot as plt
-import numpy as np
+from matplotlib.animation import ArtistAnimation
 
 from glidergun._grid import Grid
 from glidergun._literals import ColorMap
@@ -13,37 +11,8 @@ from glidergun._stack import Stack
 from glidergun._types import Extent
 
 
-def _thumbnail(obj: Union[Grid, Stack], color, figsize=None):
-    with BytesIO() as buffer:
-        figure = plt.figure(figsize=figsize, frameon=False)
-        axes = figure.add_axes((0, 0, 1, 1))
-        axes.axis("off")
-
-        if isinstance(obj, Grid):
-            n = 4000 / max(obj.width, obj.height)
-            if n < 1:
-                obj = obj.resample(obj.cell_size / n)
-            obj = obj.to_uint8_range()
-            plt.imshow(obj.data, cmap=color)
-
-        elif isinstance(obj, Stack):
-            n = 4000 / max(obj.grids[0].width, obj.grids[0].height)
-            if n < 1:
-                obj = obj.resample(obj.grids[0].cell_size / n)
-            obj = obj.to_uint8_range()
-            rgb = [obj.grids[i - 1].data for i in (color if color else (1, 2, 3))]
-            alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
-            plt.imshow(np.dstack([*[np.asanyarray(g, "uint8") for g in rgb], alpha]))
-
-        plt.savefig(buffer, bbox_inches="tight", pad_inches=0)
-        plt.close(figure)
-        image = b64encode(buffer.getvalue()).decode()
-        return f"data:image/png;base64, {image}"
-
-
 def _map(
     obj: Union[Grid, Stack],
-    color,
     opacity: float,
     basemap,
     width: int,
@@ -95,8 +64,10 @@ def _map(
     else:
         folium_map = basemap
 
+    color: Any = obj.display
+
     folium.raster_layers.ImageOverlay(  # type: ignore
-        image=_thumbnail(obj_3857, color, (20, 20)),
+        image=f"data:image/png;base64, {b64encode(obj_3857.color(color)._thumbnail((20, 20))).decode()}",
         bounds=bounds,
         opacity=opacity,
     ).add_to(folium_map)
@@ -106,13 +77,7 @@ def _map(
 
 def html(obj: Union[Grid, Stack]):
     description = str(obj).replace("|", "<br />")
-    if isinstance(obj, Grid):
-        thumbnail = _thumbnail(obj, obj._cmap)
-        extent = obj.extent
-    elif isinstance(obj, Stack):
-        thumbnail = _thumbnail(obj, obj._rgb)
-        extent = obj.extent
-    return f'<div><div>{description}</div><img src="{thumbnail}" /><div>{extent}</div></div>'
+    return f'<div><div>{description}</div><img src="{obj.img}" /><div>{obj.extent}</div></div>'
 
 
 def animate(
@@ -155,3 +120,4 @@ if ipython := IPython.get_ipython():  # type: ignore
             else f"{items}"
         ),
     )
+    formatter.for_type(ArtistAnimation, lambda a: a.to_jshtml())

@@ -52,7 +52,7 @@ class CellSize(NamedTuple):
         return CellSize(self.x / n, self.y / n)
 
 
-class Point(NamedTuple):
+class PointValue(NamedTuple):
     x: float
     y: float
     value: float
