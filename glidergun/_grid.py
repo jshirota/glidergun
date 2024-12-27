@@ -897,7 +897,7 @@ def grid(
             from glidergun._functions import create
 
             extent = cast(Tuple[float, float, float, float], extent)
-            g = create(extent, get_crs(crs or 4326), cell_size, np.nan)  # type: ignore
+            g = create(extent, get_crs(crs or 4326), cell_size)  # type: ignore
             return g.rasterize(data)  # type: ignore
 
     if isinstance(extent, Affine):

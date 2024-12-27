@@ -1,5 +1,7 @@
 # Map Algebra with NumPy
 
+Inspired by the ARC/INFO GRID implementation of [Map Algebra](https://en.m.wikipedia.org/wiki/Map_algebra).
+
 ```
 pip install glidergun
 ```
