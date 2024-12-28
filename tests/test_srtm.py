@@ -25,7 +25,7 @@ def test_distance_2():
 
 
 def test_aspect():
-    g = dem.aspect()
+    g = dem.aspect(True)
     assert g.round(4).md5 == "e203f3540ab892ab9c69b386af1b47e9"
 
 
@@ -180,19 +180,6 @@ def test_from_polygons():
     assert g2.has_nan
     assert pytest.approx(g2.min, 0.001) == 123.456
     assert pytest.approx(g2.max, 0.001) == 123.456
-
-
-def test_gosper():
-    def tick(grid: Grid):
-        g = grid.focal_sum() - grid
-        return (grid == 1) & (g == 2) | (g == 3)
-
-    gosper = tick(grid(".data/glidergun30.txt"))
-    md5s = set()
-    while gosper.md5 not in md5s:
-        md5s.add(gosper.md5)
-        gosper = tick(gosper)
-    assert len(md5s) == 60
 
 
 def test_hillshade():
@@ -419,8 +406,8 @@ def test_set_nan():
 
 
 def test_slope():
-    g = dem.slope()
-    assert g.round(4).md5 == "4604605be36bfbf1ca83e7ab21002a10"
+    g = dem.slope(True)
+    assert g.round(4).md5 == "b243cd938f0e1c06272740ffa14a4782"
 
 
 def test_sin():

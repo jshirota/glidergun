@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Tuple, Union, cast
 
 import numpy as np
-
 from numpy import ndarray
 from rasterio.crs import CRS
 from scipy.interpolate import (
@@ -85,12 +84,12 @@ def interpolate(
     crs: Union[int, CRS],
     cell_size: Union[Tuple[float, float], float],
 ):
-    from glidergun._functions import create
+    from glidergun._grid import grid
 
     points = list(points)
     coords = np.array([p[:2] for p in points])
     values = np.array([p[2] for p in points])
-    g = create(extent, crs, cell_size)
+    g = grid(np.nan, extent, crs, cell_size)
     interp = interpolator_factory(coords, values)
     xs = np.linspace(g.xmin, g.xmax, g.width)
     ys = np.linspace(g.ymax, g.ymin, g.height)

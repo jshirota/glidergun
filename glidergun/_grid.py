@@ -31,6 +31,8 @@ from rasterio.windows import Window
 from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 from glidergun._focal import Focal
 from glidergun._interpolation import Interpolation
@@ -140,7 +142,7 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
 
     @cached_property
     def std(self):
-        return float(np.nanmean(self.data))
+        return float(np.nanstd(self.data))
 
     @cached_property
     def min(self):
@@ -468,8 +470,6 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
         return g
 
     def distance(self, *points: Tuple[float, float]):
-        from glidergun._functions import distance
-
         if not points:
             points = tuple((p.x, p.y) for p in self.to_points() if p.value)
         return distance(self.extent, self.crs, self.cell_size, *points)
@@ -477,29 +477,39 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
     def randomize(self):
         return self.update(np.random.rand(self.height, self.width))
 
-    def aspect(self):
-        x, y = gradient(self.data)
-        return self.update(arctan2(-x, y))
+    def aspect(self, radians: bool = False):
+        y, x = gradient(self.data)
+        g = self.update(arctan2(-y, x))
+        if radians:
+            return g
+        return (g.local(np.degrees) + 360) % 360
 
-    def slope(self):
-        x, y = gradient(self.data)
-        return self.update(pi / 2.0 - arctan(sqrt(x * x + y * y)))
+    def slope(self, radians: bool = False):
+        y, x = gradient(self.data)
+        g = self.update(arctan(sqrt(x * x + y * y)))
+        if radians:
+            return g
+        return g.local(np.degrees)
 
     def hillshade(self, azimuth: float = 315, altitude: float = 45):
         azimuth = np.deg2rad(azimuth)
         altitude = np.deg2rad(altitude)
-        aspect = self.aspect().data
-        slope = self.slope().data
+        aspect = self.aspect(True).data
+        slope = (pi / 2.0 - self.slope(True)).data
         shaded = sin(altitude) * sin(slope) + cos(altitude) * cos(slope) * cos(
             azimuth - aspect
         )
         return self.update((255 * (shaded + 1) / 2))
 
-    def reclass(self, *mappings: Tuple[float, float, float]):
-        conditions = [
-            (self.data >= min) & (self.data < max) for min, max, _ in mappings
-        ]
-        values = [value for _, _, value in mappings]
+    def flow_direction(self):
+        raise NotImplementedError()
+
+    def flow_accumulation(self):
+        raise NotImplementedError()
+
+    def reclass(self, *mapping: Tuple[float, float, float]):
+        conditions = [(self.data >= min) & (self.data < max) for min, max, _ in mapping]
+        values = [value for _, _, value in mapping]
         return self.update(np.select(conditions, values, np.nan))
 
     def percentile(self, percent: float) -> float:
@@ -509,7 +519,7 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
         min = self.percentile(percent_clip)
         max = self.percentile(100 - percent_clip)
         interval = (max - min) / count
-        mappings = [
+        mapping = [
             (
                 min + (i - 1) * interval if i > 1 else float("-inf"),
                 min + i * interval if i < count else float("inf"),
@@ -517,7 +527,7 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
             )
             for i in range(1, count + 1)
         ]
-        return self.reclass(*mappings)
+        return self.reclass(*mapping)
 
     def replace(
         self, value: Operand, replacement: Operand, fallback: Optional[Operand] = None
@@ -754,6 +764,10 @@ def grid(
         crs: CRS or an EPSG code (e.g. 4326).
         index (int, optional): Band index.  Defaults to 1.
 
+    Example:
+        >>> grid("n55_e008_1arc_v3.bil")
+        image: 1801x3601 float32 | range: -28.000~101.000 | mean: 11.566 | std: 14.645 | crs: EPSG:4326 | cell: 0.000555555555555556, 0.000277777777777778
+
     Returns:
         Grid: A new grid.
     """
@@ -775,6 +789,12 @@ def grid(  # type: ignore
         extent: Map extent used to clip the raster.
         crs: CRS or an EPSG code (e.g. 4326).
         index (int, optional): Band index.  Defaults to 1.
+
+    Example:
+        >>> with rasterio.open("n55_e008_1arc_v3.bil") as dataset:
+        ...     grid(dataset)
+        ...
+        image: 1801x3601 float32 | range: -28.000~101.000 | mean: 11.566 | std: 14.645 | crs: EPSG:4326 | cell: 0.000555555555555556, 0.000277777777777778
 
     Returns:
         Grid: A new grid.
@@ -798,6 +818,10 @@ def grid(  # type: ignore
         crs: CRS or an EPSG code (e.g. 4326).
         index (int, optional): Band index.  Defaults to 1.
 
+    Example:
+        >>> grid(memory_file)
+        image: 1801x3601 float32 | range: -28.000~101.000 | mean: 11.566 | std: 14.645 | crs: EPSG:4326 | cell: 0.000555555555555556, 0.000277777777777778
+
     Returns:
         Grid: A new grid.
     """
@@ -814,8 +838,12 @@ def grid(
 
     Args:
         data: Array.
-        extent: Affine.
-        crs: CRS.
+        extent: Map extent.  Defaults to (0.0, 0.0, 1.0, 1.0).
+        crs: CRS or an EPSG code.  Defaults to 4326.
+
+    Example:
+        >>> grid(np.arange(12).reshape(3, 4))
+        image: 4x3 int32 | range: 0~11 | mean: 6 | std: 3 | crs: EPSG:4326 | cell: 0.25, 0.3333333333333333
 
     Returns:
         Grid: A new grid.
@@ -833,8 +861,37 @@ def grid(
 
     Args:
         data: Tuple (width, height).
+        extent: Map extent.  Defaults to (0.0, 0.0, 1.0, 1.0).
+        crs: CRS or an EPSG code.  Defaults to 4326.
+
+    Example:
+        >>> grid((40, 30))
+        image: 40x30 int32 | range: 0~1199 | mean: 600 | std: 346 | crs: EPSG:4326 | cell: 0.025, 0.03333333333333333
+
+    Returns:
+        Grid: A new grid.
+    """
+    ...
+
+
+@overload
+def grid(
+    data: float,
+    extent: Tuple[float, float, float, float],
+    crs: Union[int, CRS],
+    cell_size: Union[Tuple[float, float], float],
+) -> Grid:
+    """Creates a new grid from a constant value.
+
+    Args:
+        data: Constant value.
         extent: Map extent.
-        crs: CRS or an EPSG code (e.g. 4326) used to define the map extent.  Defaults to 4326.
+        crs: CRS or an EPSG code.
+        cell_size: Cell size.
+
+    Example:
+        >>> grid(123.456, (-120, 40, -100, 60), 4326, 1.0)
+        image: 20x20 float32 | range: 123.456~123.456 | mean: 123.456 | std: 0.000 | crs: EPSG:4326 | cell: 1.0, 1.0
 
     Returns:
         Grid: A new grid.
@@ -849,12 +906,17 @@ def grid(
     crs: Union[int, CRS],
     cell_size: Union[Tuple[float, float], float],
 ) -> Grid:
-    """Creates a new grid from an iterable of tuples (x, y, value).
+    """Creates a new grid from an iterable of tuples (geometry, value) or (x, y, value).
 
     Args:
-        data: Tuples (x, y, value).
+        data: Tuples (geometry, value) or (x, y, value).
         extent: Map extent.
-        crs: CRS or an EPSG code (e.g. 4326) used to define the map extent.  Defaults to 4326.
+        crs: CRS or an EPSG code.
+        cell_size: Cell size.
+
+    Example:
+        >>> grid([(-119, 55, 1.23), (-104, 52, 4.56), (-112, 47, 7.89)], (-120, 40, -100, 60), 4326, 1.0)
+        image: 20x20 float32 | range: 1.230~7.890 | mean: 4.560 | std: 2.719 | crs: EPSG:4326 | cell: 1.0, 1.0
 
     Returns:
         Grid: A new grid.
@@ -869,6 +931,8 @@ def grid(
         MemoryFile,
         ndarray,
         Tuple[int, int],
+        int,
+        float,
         Iterable[Union[Tuple[float, float, float], Tuple[BaseGeometry, float]]],
     ],
     extent: Union[Tuple[float, float, float, float], Affine, None] = None,
@@ -894,10 +958,23 @@ def grid(
         case w, h if isinstance(w, int) and isinstance(h, int):
             array = np.arange(w * h).reshape(h, w)
         case _:
-            from glidergun._functions import create
-
+            assert cell_size
             extent = cast(Tuple[float, float, float, float], extent)
-            g = create(extent, get_crs(crs or 4326), cell_size)  # type: ignore
+
+            if isinstance(data, (int, float)):
+                if isinstance(cell_size, (int, float)):
+                    cell_size = CellSize(cell_size, cell_size)
+                else:
+                    cell_size = CellSize(*cell_size)
+                xmin, ymin, xmax, ymax = extent
+                width = int((xmax - xmin) / cell_size.x + 0.5)
+                height = int((ymax - ymin) / cell_size.y + 0.5)
+                xmin = xmax - cell_size.x * width
+                ymax = ymin + cell_size.y * height
+                transform = Affine(cell_size.x, 0, xmin, 0, -cell_size.y, ymax, 0, 0, 1)
+                return grid(np.ones((height, width)) * data, transform, get_crs(crs))
+
+            g = grid(np.nan, extent, get_crs(crs or 4326), cell_size)  # type: ignore
             return g.rasterize(data)  # type: ignore
 
     if isinstance(extent, Affine):
@@ -1017,3 +1094,72 @@ def standardize(
         results.append(g)
 
     return tuple(results)
+
+
+def _aggregate(func: Callable, *grids: Grid) -> Grid:
+    grids_adjusted = standardize(*grids)
+    data = func(np.array([grid.data for grid in grids_adjusted]), axis=0)
+    return grids_adjusted[0].update(data)
+
+
+def mean(*grids: Grid) -> Grid:
+    return _aggregate(np.mean, *grids)
+
+
+def std(*grids: Grid) -> Grid:
+    return _aggregate(np.std, *grids)
+
+
+def minimum(*grids: Grid) -> Grid:
+    return _aggregate(np.min, *grids)
+
+
+def maximum(*grids: Grid) -> Grid:
+    return _aggregate(np.max, *grids)
+
+
+def distance(
+    extent: Tuple[float, float, float, float],
+    crs: Union[int, CRS],
+    cell_size: Union[Tuple[float, float], float],
+    *points: Tuple[float, float],
+):
+    g = grid(np.nan, extent, crs, cell_size)
+
+    if len(points) == 0:
+        raise ValueError("Distance function requires at least one point.")
+
+    if len(points) > 1000:
+        raise ValueError("Distance function only accepts up to 1000 points.")
+
+    if len(points) > 1:
+        grids = [distance(extent, crs, cell_size, p) for p in points]
+        return minimum(*grids)
+
+    point = list(points)[0]
+    w = int((g.extent.xmax - g.extent.xmin) / g.cell_size.x)
+    h = int((g.extent.ymax - g.extent.ymin) / g.cell_size.y)
+    dx = int((g.extent.xmin - point[0]) / g.cell_size.x)
+    dy = int((point[1] - g.extent.ymax) / g.cell_size.y)
+    data = np.meshgrid(
+        np.array(range(dx, w + dx)) * g.cell_size.x,
+        np.array(range(dy, h + dy)) * g.cell_size.y,
+    )
+    gx = grid(data[0], g.transform, g.crs)
+    gy = grid(data[1], g.transform, g.crs)
+    return (gx**2 + gy**2) ** (1 / 2)
+
+
+def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
+    grids_adjusted = [con(g.is_nan(), float(g.mean), g) for g in standardize(*grids)]
+    arrays = (
+        PCA(n_components=n_components)
+        .fit_transform(
+            np.array(
+                [g.scale(StandardScaler()).data.ravel() for g in grids_adjusted]
+            ).transpose((1, 0))
+        )
+        .transpose((1, 0))
+    )
+    g = grids_adjusted[0]
+    return tuple(g.update(a.reshape((g.height, g.width))) for a in arrays)

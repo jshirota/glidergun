@@ -72,7 +72,7 @@ def test_mean(sample_grid):
 
 
 def test_std(sample_grid):
-    assert sample_grid.std == 5.0
+    assert sample_grid.std == 2.58198881149292
     assert isinstance(sample_grid.std, float)
 
 

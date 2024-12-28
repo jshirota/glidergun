@@ -14,13 +14,13 @@ from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
 
-from glidergun._functions import pca
 from glidergun._grid import (
     Extent,
     Grid,
     _metadata,
     _read,
     con,
+    pca,
     standardize,
 )
 from glidergun._literals import BaseMap, DataType

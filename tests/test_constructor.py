@@ -1,3 +1,4 @@
+import pytest
 import rasterio
 
 from glidergun import grid
@@ -30,3 +31,23 @@ def test_box():
     assert g.crs == 4326
     assert g.width == 40
     assert g.height == 30
+
+
+def test_constant_int():
+    g = grid(123, (-120, 30, -119, 31), 4326, 0.1)
+    assert g.extent == (-120, 30, -119, 31)
+    assert g.crs == 4326
+    assert g.cell_size == (0.1, 0.1)
+    assert pytest.approx(g.min, 0.001) == 123
+    assert pytest.approx(g.max, 0.001) == 123
+    assert pytest.approx(g.mean, 0.001) == 123
+
+
+def test_constant_float():
+    g = grid(123.456, (-120, 30, -119, 31), 4326, 0.1)
+    assert g.extent == (-120, 30, -119, 31)
+    assert g.crs == 4326
+    assert g.cell_size == (0.1, 0.1)
+    assert pytest.approx(g.min, 0.001) == 123.456
+    assert pytest.approx(g.max, 0.001) == 123.456
+    assert pytest.approx(g.mean, 0.001) == 123.456

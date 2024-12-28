@@ -1,15 +1,17 @@
 # ruff: noqa: F401
 from glidergun._display import animate
-from glidergun._functions import (
-    create,
+from glidergun._grid import (
+    Grid,
+    con,
     distance,
+    grid,
     maximum,
     mean,
     minimum,
     pca,
+    standardize,
     std,
 )
-from glidergun._grid import Grid, con, grid, standardize
 from glidergun._literals import BaseMap, ColorMap, DataType, ResamplingMethod
 from glidergun._mosaic import Mosaic, mosaic
 from glidergun._prediction import load_model
