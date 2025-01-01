@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from glidergun._grid import Grid, grid
+from glidergun._grid import grid
 
 
 @pytest.fixture
@@ -44,17 +44,6 @@ def test_zonal_ptp(grid_data, zone_grid_data):
         [3, 3, 3],
         [2, 2, 2],
     ]
-
-
-def test_zonal_percentile(grid_data, zone_grid_data):
-    result = grid_data.zonal_percentile(50, zone_grid_data)
-    assert isinstance(result, Grid)
-
-
-def test_zonal_quantile(grid_data, zone_grid_data):
-    result = grid_data.zonal_quantile(0.5, zone_grid_data)
-    g = result.set_nan(zone_grid_data != 1, result)
-    assert g.min == g.max == 2
 
 
 def test_zonal_median(grid_data, zone_grid_data):

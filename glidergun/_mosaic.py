@@ -37,13 +37,11 @@ class Mosaic:
 
 
 @overload
-def mosaic(*grids: str) -> Mosaic:
-    pass
+def mosaic(*grids: str) -> Mosaic: ...
 
 
 @overload
-def mosaic(*grids: Grid) -> Grid:
-    pass
+def mosaic(*grids: Grid) -> Grid: ...
 
 
 def mosaic(*grids):

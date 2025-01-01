@@ -1,6 +1,6 @@
 [project]
 name = "glidergun"
-version = "0.8.25"
+version = "0.8.30"
 description = "Map Algebra with NumPy"
 readme = "README.md"
 requires-python = ">=3.9"

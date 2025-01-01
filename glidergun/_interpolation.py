@@ -95,4 +95,4 @@ def interpolate(
     ys = np.linspace(g.ymax, g.ymin, g.height)
     array = np.array([[x0, y0] for x0 in xs for y0 in ys])
     data = interp(array).reshape((g.width, g.height)).transpose(1, 0)
-    return g.local(lambda _: data)
+    return g.update(data)

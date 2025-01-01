@@ -110,34 +110,6 @@ def test_grid_interp_compare():
     assert g3.min != g3.max
 
 
-# def test_flow_direction():
-#     actual = grid(
-#         np.array(
-#             [
-#                 [78, 72, 69, 71, 58, 49],
-#                 [74, 67, 56, 49, 46, 50],
-#                 [69, 53, 44, 37, 38, 48],
-#                 [64, 58, 55, 22, 31, 24],
-#                 [68, 61, 47, 21, 16, 19],
-#                 [74, 53, 34, 12, 11, 12],
-#             ]
-#         )
-#     ).flow_direction()
-#     expected = grid(
-#         np.array(
-#             [
-#                 [2, 2, 2, 4, 4, 8],
-#                 [2, 2, 2, 4, 4, 8],
-#                 [1, 1, 2, 4, 8, 4],
-#                 [128, 128, 1, 2, 4, 8],
-#                 [2, 2, 1, 4, 4, 4],
-#                 [1, 1, 1, 1, 4, 16],
-#             ]
-#         )
-#     )
-#     assert actual.md5 == expected.md5
-
-
 def test_slope():
     g = grid(
         np.array(

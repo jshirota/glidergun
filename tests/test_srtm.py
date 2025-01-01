@@ -155,14 +155,14 @@ def test_focal_mean():
 def test_focal_mean_2():
     g1 = dem.resample(0.02)
     g2 = g1.focal_mean()
-    g3 = g1.focal_python(np.nanmean)
+    g3 = g1.focal_generic(np.nanmean)
     assert g2.md5 == g3.md5
 
 
 def test_focal_mean_3():
     g1 = dem.resample(0.02)
     g2 = g1.focal_mean(3, True, False)
-    g3 = g1.focal_python(np.mean, 3, True, False)
+    g3 = g1.focal_generic(np.mean, 3, True, False)
     assert g2.md5 == g3.md5
 
 
@@ -518,3 +518,18 @@ def test_mosaic_eager_vs_lazy():
     m = mosaic("./.data/n55_e008_1arc_v3.bil", "./.data/n55_e009_1arc_v3.bil")
 
     assert g.clip(8, 55, 8.5, 56).md5 == m.clip(8, 55, 8.5, 56).md5
+
+
+def test_tiling():
+    g = mosaic(
+        grid("./.data/n55_e008_1arc_v3.bil"),
+        grid("./.data/n55_e009_1arc_v3.bil"),
+    )
+
+    fmean = g.focal_mean(2)
+
+    assert g.extent == fmean.extent
+    assert g.crs == fmean.crs
+    assert g.cell_size == fmean.cell_size
+    assert g.width == fmean.width
+    assert g.height == fmean.height
