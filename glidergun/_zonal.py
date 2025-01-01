@@ -27,12 +27,6 @@ class Zonal:
     def zonal_ptp(self, zone_grid: "Grid", **kwargs):
         return self.zonal(lambda a: np.ptp(a, **kwargs), zone_grid)
 
-    def zonal_percentile(self, percentile: float, zone_grid: "Grid", **kwargs):
-        return self.zonal(lambda a: np.percentile(a, percentile, **kwargs), zone_grid)
-
-    def zonal_quantile(self, probability: float, zone_grid: "Grid", **kwargs):
-        return self.zonal(lambda a: np.quantile(a, probability, **kwargs), zone_grid)
-
     def zonal_median(self, zone_grid: "Grid", **kwargs):
         return self.zonal(lambda a: np.median(a, **kwargs), zone_grid)
 

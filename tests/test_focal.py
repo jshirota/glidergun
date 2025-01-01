@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import pytest
 
@@ -6,7 +8,7 @@ from glidergun._grid import Grid, grid
 
 class TestFocal:
     @pytest.fixture
-    def focal(self):
+    def sample_grid(self):
         data = np.array(
             [
                 [1, 2, 3],
@@ -16,8 +18,8 @@ class TestFocal:
         )
         return grid(data)
 
-    def test_focal_count(self, focal: Grid):
-        result = focal.focal_count(value=5, buffer=1, circle=False)
+    def test_focal_count(self, sample_grid: Grid):
+        result = sample_grid.focal_count(value=5, buffer=1, circle=False)
         expected = np.array(
             [
                 [1, 1, 1],
@@ -27,8 +29,8 @@ class TestFocal:
         )
         np.testing.assert_array_equal(result.data, expected)
 
-    def test_focal_ptp(self, focal: Grid):
-        result = focal.focal_ptp(buffer=1, circle=False)
+    def test_focal_ptp(self, sample_grid: Grid):
+        result = sample_grid.focal_ptp(buffer=1, circle=False)
         expected = np.array(
             [
                 [np.nan, np.nan, np.nan],
@@ -38,8 +40,8 @@ class TestFocal:
         )
         np.testing.assert_array_equal(result.data, expected)
 
-    def test_focal_percentile(self, focal: Grid):
-        result = focal.focal_percentile(percentile=50, buffer=1, circle=False)
+    def test_focal_median(self, sample_grid: Grid):
+        result = sample_grid.focal_median(buffer=1, circle=False)
         expected = np.array(
             [
                 [3.0, 3.5, 4.0],
@@ -49,8 +51,8 @@ class TestFocal:
         )
         np.testing.assert_array_equal(result.data, expected)
 
-    def test_focal_quantile(self, focal: Grid):
-        result = focal.focal_quantile(probability=0.5, buffer=1, circle=False)
+    def test_focal_mean(self, sample_grid: Grid):
+        result = sample_grid.focal_mean(buffer=1, circle=False)
         expected = np.array(
             [
                 [3.0, 3.5, 4.0],
@@ -60,30 +62,8 @@ class TestFocal:
         )
         np.testing.assert_array_equal(result.data, expected)
 
-    def test_focal_median(self, focal: Grid):
-        result = focal.focal_median(buffer=1, circle=False)
-        expected = np.array(
-            [
-                [3.0, 3.5, 4.0],
-                [4.5, 5.0, 5.5],
-                [6.0, 6.5, 7.0],
-            ]
-        )
-        np.testing.assert_array_equal(result.data, expected)
-
-    def test_focal_mean(self, focal: Grid):
-        result = focal.focal_mean(buffer=1, circle=False)
-        expected = np.array(
-            [
-                [3.0, 3.5, 4.0],
-                [4.5, 5.0, 5.5],
-                [6.0, 6.5, 7.0],
-            ]
-        )
-        np.testing.assert_array_equal(result.data, expected)
-
-    def test_focal_std(self, focal: Grid):
-        result = focal.focal_std(buffer=1, circle=False)
+    def test_focal_std(self, sample_grid: Grid):
+        result = sample_grid.focal_std(buffer=1, circle=False)
         expected = np.array(
             [
                 [1.581139, 1.707825, 1.581139],
@@ -93,8 +73,8 @@ class TestFocal:
         )
         np.testing.assert_array_almost_equal(result.data, expected)
 
-    def test_focal_var(self, focal: Grid):
-        result = focal.focal_var(buffer=1, circle=False)
+    def test_focal_var(self, sample_grid: Grid):
+        result = sample_grid.focal_var(buffer=1, circle=False)
         expected = np.array(
             [
                 [2.5, 2.916667, 2.5],
@@ -104,8 +84,8 @@ class TestFocal:
         )
         np.testing.assert_array_almost_equal(result.data, expected)
 
-    def test_focal_min(self, focal: Grid):
-        result = focal.focal_min(buffer=1, circle=False)
+    def test_focal_min(self, sample_grid: Grid):
+        result = sample_grid.focal_min(buffer=1, circle=False)
         expected = np.array(
             [
                 [1, 1, 2],
@@ -115,8 +95,8 @@ class TestFocal:
         )
         np.testing.assert_array_equal(result.data, expected)
 
-    def test_focal_max(self, focal: Grid):
-        result = focal.focal_max(buffer=1, circle=False)
+    def test_focal_max(self, sample_grid: Grid):
+        result = sample_grid.focal_max(buffer=1, circle=False)
         expected = np.array(
             [
                 [5, 6, 6],
@@ -126,8 +106,8 @@ class TestFocal:
         )
         np.testing.assert_array_equal(result.data, expected)
 
-    def test_focal_sum(self, focal: Grid):
-        result = focal.focal_sum(buffer=1, circle=False)
+    def test_focal_sum(self, sample_grid: Grid):
+        result = sample_grid.focal_sum(buffer=1, circle=False)
         expected = np.array(
             [
                 [12, 21, 16],
@@ -136,3 +116,26 @@ class TestFocal:
             ]
         )
         np.testing.assert_array_equal(result.data, expected)
+
+    def get_focal_grids(self, g: Grid, func) -> Tuple[Grid, Grid]:
+        extent = 0.2, 0.2, 0.3, 0.3
+        g1 = g.resample(0.001, "bilinear")
+        g2 = func(g1, buffer=20, circle=True, max_workers=4).clip(*extent)
+        g3 = func(g1.clip(0.1, 0.1, 0.4, 0.4), buffer=20, circle=True).clip(*extent)
+        return g2, g3
+
+    def test_compare_focal_mean(self, sample_grid: Grid):
+        g1, g2 = self.get_focal_grids(sample_grid, Grid.focal_mean)
+        assert g1.md5 == g2.md5
+
+    def test_compare_focal_std(self, sample_grid: Grid):
+        g1, g2 = self.get_focal_grids(sample_grid, Grid.focal_std)
+        assert g1.md5 == g2.md5
+
+    def test_compare_focal_sum(self, sample_grid: Grid):
+        g1, g2 = self.get_focal_grids(sample_grid, Grid.focal_sum)
+        assert g1.md5 == g2.md5
+
+    def test_compare_focal_ptp(self, sample_grid: Grid):
+        g1, g2 = self.get_focal_grids(sample_grid, Grid.focal_ptp)
+        assert g1.md5 == g2.md5

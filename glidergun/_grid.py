@@ -613,7 +613,7 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
         g = self.is_nan().con(nodata, self)
         kmeans = KMeans(n_clusters=n_clusters, **kwargs).fit(g.data.reshape(-1, 1))
         data = kmeans.cluster_centers_[kmeans.labels_].reshape(self.data.shape)
-        result = self.local(lambda _: data)
+        result = self.update(data)
         return result.set_nan(self.is_nan())
 
     def scale(self, scaler: Scaler, **fit_params):
@@ -651,16 +651,16 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
         grayscale: bool = True,
         **kwargs,
     ):
-        from glidergun._display import _map
+        from glidergun._display import get_folium_map
 
-        return _map(
+        return get_folium_map(
             self, opacity, basemap, width, height, attribution, grayscale, **kwargs
         )
 
     def type(self, dtype: DataType):
         if self.dtype == dtype:
             return self
-        return self.local(lambda data: np.asanyarray(data, dtype=dtype))
+        return self.local(lambda a: np.asanyarray(a, dtype=dtype))
 
     @overload
     def save(

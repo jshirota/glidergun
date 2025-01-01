@@ -229,9 +229,9 @@ class Stack:
         grayscale: bool = True,
         **kwargs,
     ):
-        from glidergun._display import _map
+        from glidergun._display import get_folium_map
 
-        return _map(
+        return get_folium_map(
             self, opacity, basemap, width, height, attribution, grayscale, **kwargs
         )
 

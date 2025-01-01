@@ -11,7 +11,7 @@ from glidergun._stack import Stack
 from glidergun._types import Extent
 
 
-def _map(
+def get_folium_map(
     obj: Union[Grid, Stack],
     opacity: float,
     basemap,
@@ -75,7 +75,7 @@ def _map(
     return folium_map
 
 
-def html(obj: Union[Grid, Stack]):
+def get_html(obj: Union[Grid, Stack]):
     description = str(obj).replace("|", "<br />")
     return f'<div><div>{description}</div><img src="{obj.img}" /><div>{obj.extent}</div></div>'
 
@@ -104,15 +104,15 @@ def animate(
 if ipython := IPython.get_ipython():  # type: ignore
     formatters = ipython.display_formatter.formatters  # type: ignore
     formatter = formatters["text/html"]
-    formatter.for_type(Grid, html)
-    formatter.for_type(Stack, html)
+    formatter.for_type(Grid, get_html)
+    formatter.for_type(Stack, get_html)
     formatter.for_type(
         tuple,
         lambda items: (
             f"""
             <table>
                 <tr style="text-align: left">
-                    {"".join(f"<td>{html(item)}</td>" for item in items)}
+                    {"".join(f"<td>{get_html(item)}</td>" for item in items)}
                 </tr>
             </table>
         """
