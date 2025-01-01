@@ -19,7 +19,6 @@ from typing import (
 import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
-import scipy as sp
 from numpy import arctan, arctan2, cos, gradient, ndarray, pi, sin, sqrt
 from rasterio import DatasetReader, features
 from rasterio.crs import CRS
@@ -342,32 +341,6 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
     def round(self, decimals: int = 0):
         return self.local(lambda a: np.round(a, decimals))
 
-    def gaussian_filter(self, sigma: float, **kwargs):
-        return self.local(lambda a: sp.ndimage.gaussian_filter(a, sigma, **kwargs))
-
-    def gaussian_filter1d(self, sigma: float, **kwargs):
-        return self.local(lambda a: sp.ndimage.gaussian_filter1d(a, sigma, **kwargs))
-
-    def gaussian_gradient_magnitude(self, sigma: float, **kwargs):
-        return self.local(
-            lambda a: sp.ndimage.gaussian_gradient_magnitude(a, sigma, **kwargs)
-        )
-
-    def gaussian_laplace(self, sigma: float, **kwargs):
-        return self.local(lambda a: sp.ndimage.gaussian_laplace(a, sigma, **kwargs))
-
-    def prewitt(self, **kwargs):
-        return self.local(lambda a: sp.ndimage.prewitt(a, **kwargs))
-
-    def sobel(self, **kwargs):
-        return self.local(lambda a: sp.ndimage.sobel(a, **kwargs))
-
-    def uniform_filter(self, **kwargs):
-        return self.local(lambda a: sp.ndimage.uniform_filter(a, **kwargs))
-
-    def uniform_filter1d(self, size: float, **kwargs):
-        return self.local(lambda a: sp.ndimage.uniform_filter1d(a, size, **kwargs))
-
     def georeference(
         self,
         xmin: float,
@@ -500,12 +473,6 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
             azimuth - aspect
         )
         return self.update((255 * (shaded + 1) / 2))
-
-    def flow_direction(self):
-        raise NotImplementedError()
-
-    def flow_accumulation(self):
-        raise NotImplementedError()
 
     def reclass(self, *mapping: Tuple[float, float, float]):
         conditions = [(self.data >= min) & (self.data < max) for min, max, _ in mapping]

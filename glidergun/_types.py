@@ -1,12 +1,9 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol
+from typing import Callable, NamedTuple, Protocol
 
 from numpy import ndarray
 from rasterio.crs import CRS
 from rasterio.transform import Affine
-
-if TYPE_CHECKING:
-    from glidergun._grid import Grid
 
 
 @dataclass(frozen=True)
@@ -62,8 +59,3 @@ class Scaler(Protocol):
     fit: Callable
     transform: Callable
     fit_transform: Callable
-
-
-class StatsResult(NamedTuple):
-    statistic: "Grid"
-    pvalue: "Grid"
