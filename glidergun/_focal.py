@@ -24,7 +24,7 @@ class Focal:
             mask = _mask(buffer) if circle else np.full((size, size), True)
             array = sliding_window_view(_pad(g.data, buffer), (size, size))
             result = func(array[:, :, mask])
-            return g.update(result)
+            return g.local(result)
 
         return _batch(f, buffer, cast("Grid", self), max_workers)
 
@@ -150,7 +150,7 @@ class Focal:
         def f(g: "Grid"):
             n = 0
             while g.has_nan and n <= max_exponent:
-                g = g.is_nan().con(g.focal_mean(2**n, True), g)
+                g = g.is_nan().then(g.focal_mean(2**n, True), g)
                 n += 1
             return g
 

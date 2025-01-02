@@ -526,10 +526,24 @@ def test_tiling():
         grid("./.data/n55_e009_1arc_v3.bil"),
     )
 
-    fmean = g.focal_mean(5)
+    fmean = g.focal_mean(2)
 
     assert g.extent == fmean.extent
     assert g.crs == fmean.crs
     assert g.cell_size == fmean.cell_size
     assert g.width == fmean.width
     assert g.height == fmean.height
+
+
+def test_set_nan_2():
+    g = dem.resample(0.02)
+
+    assert g.is_less_than(1).then(np.nan, g).md5 == g.set_nan(g < 1).md5
+    assert (
+        g.resample(0.04).set_nan(g < 1).md5
+        == g.resample(0.04).set_nan(lambda g: g < 1).md5
+    )
+    assert (
+        g.resample(0.04).con(lambda g: g < 1, np.nan).md5
+        == g.resample(0.04).set_nan(lambda g: g < 1).md5
+    )

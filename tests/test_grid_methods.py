@@ -26,7 +26,7 @@ def test_grid_slice():
 
 def test_grid_replace():
     g = grid(np.array([[1, 2], [3, 4]]))
-    result = g.replace(2, 20)
+    result = g.con(2, 20)
     expected = grid(np.array([[1, 20], [3, 4]]))
     assert np.array_equal(result.data, expected.data)
 

@@ -75,7 +75,9 @@ def get_folium_map(
     return folium_map
 
 
-def get_html(obj: Union[Grid, Stack]):
+def get_html(obj: Union[Grid, Stack, ArtistAnimation]):
+    if isinstance(obj, ArtistAnimation):
+        return f"<div>{obj.to_jshtml()}</div>"
     description = str(obj).replace("|", "<br />")
     return f'<div><div>{description}</div><img src="{obj.img}" /><div>{obj.extent}</div></div>'
 
@@ -86,7 +88,7 @@ def animate(
     interval: int = 100,
 ):
     first = next(iter(grids))
-    n = 4 / max(first.width, first.height)
+    n = 5 / first.width
     figsize = (first.width * n, first.height * n)
 
     def iterate():
@@ -106,6 +108,7 @@ if ipython := IPython.get_ipython():  # type: ignore
     formatter = formatters["text/html"]
     formatter.for_type(Grid, get_html)
     formatter.for_type(Stack, get_html)
+    formatter.for_type(ArtistAnimation, get_html)
     formatter.for_type(
         tuple,
         lambda items: (
@@ -116,8 +119,7 @@ if ipython := IPython.get_ipython():  # type: ignore
                 </tr>
             </table>
         """
-            if all(isinstance(item, Grid) or isinstance(item, Stack) for item in items)
+            if all(isinstance(item, (Grid, Stack)) for item in items)
             else f"{items}"
         ),
     )
-    formatter.for_type(ArtistAnimation, lambda a: a.to_jshtml())

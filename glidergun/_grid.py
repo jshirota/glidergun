@@ -4,6 +4,7 @@ from base64 import b64encode
 from dataclasses import dataclass
 from functools import cached_property
 from io import BytesIO
+from types import FunctionType
 from typing import (
     Any,
     Callable,
@@ -264,16 +265,31 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
     __rlshift__ = __rshift__
 
     def __neg__(self):
-        return self.update(-1 * self.data)
+        return self.local(-1 * self.data)
 
     def __pos__(self):
-        return self.update(1 * self.data)
+        return self.local(1 * self.data)
 
     def __invert__(self):
         return con(self, False, True)
 
-    def update(self, data: ndarray):
-        return grid(data, self.transform, self.crs)
+    def is_greater_than(self, n: Operand):
+        return self > n
+
+    def is_less_than(self, n: Operand):
+        return self < n
+
+    def is_greater_than_or_equal(self, n: Operand):
+        return self >= n
+
+    def is_less_than_or_equal(self, n: Operand):
+        return self <= n
+
+    def is_equal(self, n: Operand):
+        return self == n
+
+    def is_not_equal(self, n: Operand):
+        return self != n
 
     def _data(self, n: Operand):
         if isinstance(n, Grid):
@@ -282,22 +298,18 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
 
     def _apply(self, left: Operand, right: Operand, op: Callable):
         if not isinstance(left, Grid) or not isinstance(right, Grid):
-            return self.update(op(self._data(left), self._data(right)))
+            return self.local(op(self._data(left), self._data(right)))
 
         if left.cell_size == right.cell_size and left.extent == right.extent:
-            return self.update(op(left.data, right.data))
+            return self.local(op(left.data, right.data))
 
         l_adjusted, r_adjusted = standardize(left, right)
 
-        return self.update(op(l_adjusted.data, r_adjusted.data))
+        return self.local(op(l_adjusted.data, r_adjusted.data))
 
-    def local(self, func: Callable[[ndarray], Any]):
-        return self.update(func(self.data))
-
-    def con(self, trueValue: Operand, falseValue: Operand):
-        return self.local(
-            lambda data: np.where(data, self._data(trueValue), self._data(falseValue))
-        )
+    def local(self, func: Union[Callable[[ndarray], ndarray], ndarray]):
+        data = func if isinstance(func, ndarray) else func(self.data)
+        return grid(data, self.transform, self.crs)
 
     def mosaic(self, *grids: "Grid"):
         grids_adjusted = standardize(self, *grids, extent="union")
@@ -447,19 +459,20 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
             points = tuple((p.x, p.y) for p in self.to_points() if p.value)
         return distance(self.extent, self.crs, self.cell_size, *points)
 
-    def randomize(self):
-        return self.update(np.random.rand(self.height, self.width))
+    def randomize(self, normal_distribution: bool = False):
+        f = np.random.randn if normal_distribution else np.random.rand
+        return self.local(f(self.height, self.width))
 
     def aspect(self, radians: bool = False):
         y, x = gradient(self.data)
-        g = self.update(arctan2(-y, x))
+        g = self.local(arctan2(-y, x))
         if radians:
             return g
         return (g.local(np.degrees) + 360) % 360
 
     def slope(self, radians: bool = False):
         y, x = gradient(self.data)
-        g = self.update(arctan(sqrt(x * x + y * y)))
+        g = self.local(arctan(sqrt(x * x + y * y)))
         if radians:
             return g
         return g.local(np.degrees)
@@ -472,12 +485,12 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
         shaded = sin(altitude) * sin(slope) + cos(altitude) * cos(slope) * cos(
             azimuth - aspect
         )
-        return self.update((255 * (shaded + 1) / 2))
+        return self.local((255 * (shaded + 1) / 2))
 
     def reclass(self, *mapping: Tuple[float, float, float]):
         conditions = [(self.data >= min) & (self.data < max) for min, max, _ in mapping]
         values = [value for _, _, value in mapping]
-        return self.update(np.select(conditions, values, np.nan))
+        return self.local(np.select(conditions, values, np.nan))
 
     def percentile(self, percent: float) -> float:
         return np.nanpercentile(self.data, percent)  # type: ignore
@@ -496,17 +509,31 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
         ]
         return self.reclass(*mapping)
 
-    def replace(
-        self, value: Operand, replacement: Operand, fallback: Optional[Operand] = None
+    def con(
+        self,
+        predicate: Union[Operand, Callable[["Grid"], "Grid"]],
+        replacement: Operand,
+        fallback: Optional[Operand] = None,
     ):
+        if isinstance(predicate, FunctionType):
+            g = predicate(self)
+        elif isinstance(predicate, Grid):
+            g = predicate
+        else:
+            g = self == predicate
         return con(
-            value if isinstance(value, Grid) else self == value,
-            replacement,
-            self if fallback is None else fallback,
+            self.standardize(g)[1], replacement, self if fallback is None else fallback
         )
 
-    def set_nan(self, value: Operand, fallback: Optional[Operand] = None):
-        return self.replace(value, np.nan, fallback)
+    def set_nan(
+        self,
+        predicate: Union[Operand, Callable[["Grid"], "Grid"]],
+        fallback: Optional[Operand] = None,
+    ):
+        return self.con(predicate, np.nan, fallback)
+
+    def then(self, trueValue: Operand, falseValue: Operand):
+        return con(self, trueValue, falseValue)
 
     def value(self, x: float, y: float) -> float:
         xoff = (x - self.xmin) / self.transform.a
@@ -577,7 +604,7 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
             all_touched=all_touched,
             default_value=np.nan,  # type: ignore
         )
-        return self.update(array)
+        return self.local(array)
 
     def to_stack(self):
         from glidergun._stack import stack
@@ -587,7 +614,7 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
         grid3 = grid2 / grid2.max
         arrays = plt.get_cmap(self.display)(grid3.data).transpose(2, 0, 1)[:3]  # type: ignore
         mask = self.is_nan()
-        r, g, b = [self.update(a * 253 + 1).set_nan(mask) for a in arrays]
+        r, g, b = [self.local(a * 253 + 1).set_nan(mask) for a in arrays]
         return stack(r, g, b)
 
     def stretch(self, min_value: float, max_value: float):
@@ -610,10 +637,10 @@ class Grid(GridCore, Interpolation, Prediction, Focal, Zonal):
         return con(self > value, np.nan if set_nan else value, self)
 
     def kmeans_cluster(self, n_clusters: int, nodata: float = 0.0, **kwargs):
-        g = self.is_nan().con(nodata, self)
+        g = self.is_nan().then(nodata, self)
         kmeans = KMeans(n_clusters=n_clusters, **kwargs).fit(g.data.reshape(-1, 1))
         data = kmeans.cluster_centers_[kmeans.labels_].reshape(self.data.shape)
-        result = self.update(data)
+        result = self.local(data)
         return result.set_nan(self.is_nan())
 
     def scale(self, scaler: Scaler, **fit_params):
@@ -1006,7 +1033,9 @@ def con(grid: Grid, trueValue: Operand, falseValue: Operand):
     Returns:
         Grid: A new grid.
     """
-    return grid.con(trueValue, falseValue)
+    return grid.local(
+        lambda data: np.where(data, grid._data(trueValue), grid._data(falseValue))
+    )
 
 
 def standardize(
@@ -1066,7 +1095,7 @@ def standardize(
 def _aggregate(func: Callable, *grids: Grid) -> Grid:
     grids_adjusted = standardize(*grids)
     data = func(np.array([grid.data for grid in grids_adjusted]), axis=0)
-    return grids_adjusted[0].update(data)
+    return grids_adjusted[0].local(data)
 
 
 def mean(*grids: Grid) -> Grid:
@@ -1129,4 +1158,4 @@ def pca(n_components: int = 1, *grids: Grid) -> Tuple[Grid, ...]:
         .transpose((1, 0))
     )
     g = grids_adjusted[0]
-    return tuple(g.update(a.reshape((g.height, g.width))) for a in arrays)
+    return tuple(g.local(a.reshape((g.height, g.width))) for a in arrays)
