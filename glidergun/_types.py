@@ -1,11 +1,11 @@
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, NamedTuple, Protocol, Tuple, Union
+from typing import Literal, NamedTuple, Protocol, TypedDict
 
 from numpy import ndarray
+from pyparsing import Any
 from rasterio.crs import CRS
 from rasterio.transform import Affine
-
-from glidergun._literals import ColorMap
 
 
 @dataclass(frozen=True)
@@ -13,11 +13,6 @@ class GridCore:
     data: ndarray
     transform: Affine
     crs: CRS
-
-
-class Defaults:
-    display: Union[ColorMap, Any] = "gray"
-    annotation_threshold: int = 12
 
 
 class Extent(NamedTuple):
@@ -35,18 +30,13 @@ class Extent(NamedTuple):
         assert self.is_valid, f"Invalid extent: {self}"
 
     def intersects(self, xmin: float, ymin: float, xmax: float, ymax: float):
-        return (
-            self.xmin < xmax
-            and self.xmax > xmin
-            and self.ymin < ymax
-            and self.ymax > ymin
-        )
+        return self.xmin < xmax and self.xmax > xmin and self.ymin < ymax and self.ymax > ymin
 
     def intersect(self, extent: "Extent"):
-        return Extent(*[f(x) for f, x in zip((max, max, min, min), zip(self, extent))])
+        return Extent(*[f(x) for f, x in zip((max, max, min, min), zip(self, extent, strict=False), strict=False)])
 
     def union(self, extent: "Extent"):
-        return Extent(*[f(x) for f, x in zip((min, min, max, max), zip(self, extent))])
+        return Extent(*[f(x) for f, x in zip((min, min, max, max), zip(self, extent, strict=False), strict=False)])
 
     def tiles(self, width: float, height: float):
         xmin = self.xmin
@@ -60,6 +50,9 @@ class Extent(NamedTuple):
                     yield extent
                 ymin = ymax
             xmin = xmax
+
+    def buffer(self, width: float, height: float):
+        return Extent(self.xmin - width, self.ymin - height, self.xmax + width, self.ymax + height)
 
     def __repr__(self):
         return show(self)
@@ -75,12 +68,12 @@ class CellSize(NamedTuple):
     y: float
 
     def __mul__(self, n: object):
-        if not isinstance(n, (float, int)):
+        if not isinstance(n, (float | int)):
             return NotImplemented
         return CellSize(self.x * n, self.y * n)
 
     def __rmul__(self, n: object):
-        if not isinstance(n, (float, int)):
+        if not isinstance(n, (float | int)):
             return NotImplemented
         return CellSize(self.x * n, self.y * n)
 
@@ -89,6 +82,17 @@ class CellSize(NamedTuple):
 
     def __repr__(self):
         return show(self)
+
+
+class Feature(TypedDict):
+    type: Literal["Feature"]
+    geometry: dict[str, Any]
+    properties: dict[str, Any]
+
+
+class FeatureCollection(TypedDict):
+    type: Literal["FeatureCollection"]
+    features: list[Feature]
 
 
 class PointValue(NamedTuple):
@@ -106,5 +110,5 @@ class Scaler(Protocol):
     fit_transform: Callable
 
 
-def show(obj: Tuple[float, ...]) -> str:
-    return f"({', '.join(map(lambda n: str(round(n, 6)), obj))})"
+def show(obj: tuple[float, ...]) -> str:
+    return f"({', '.join(str(round(n, 6)) for n in obj)})"

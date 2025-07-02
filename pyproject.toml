@@ -1,26 +1,28 @@
 [project]
 name = "glidergun"
-version = "0.8.71"
+version = "0.8.106"
 description = "Map Algebra with NumPy"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
-    "fiona>=1.10.1",
     "folium>=0.18.0",
-    "ipython>=8.12.3",
-    "matplotlib>=3.9.3",
-    "numpy>=2.0.2",
-    "rasterio>=1.4.2",
-    "scikit-learn>=1.5.2",
-    "scipy>=1.13.1",
-    "shapely>=2.0.6",
+    "ipython>=8.0.0",
+    "matplotlib>=3.5.1",
+    "numpy>=1.22.0",
+    "rasterio>=1.2.10",
+    "scikit-learn>=1.0.2",
+    "scipy>=1.7.3",
+    "shapely>=1.8.0",
 ]
 
 [dependency-groups]
 dev = [
-    "ipykernel>=6.29.5",
+    "huggingface-hub>=0.36.0",
+    "ipykernel>=7.1.0",
+    "openai-clip>=1.0.1",
     "pytest>=8.3.3",
     "ruff>=0.8.1",
+    "sam3>=0.1.2",
 ]
 
 [project.urls]

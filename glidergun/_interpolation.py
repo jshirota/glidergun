@@ -1,14 +1,6 @@
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from numpy import ndarray
@@ -30,8 +22,8 @@ if TYPE_CHECKING:
 class Interpolation:
     def interp_clough_tocher(
         self,
-        points: Optional[Sequence[Tuple[float, float, float]]] = None,
-        cell_size: Union[Tuple[float, float], float, None] = None,
+        points: Sequence[tuple[float, float, float]] | None = None,
+        cell_size: tuple[float, float] | float | None = None,
         fill_value: float = np.nan,
         tol: float = 0.000001,
         maxiter: int = 400,
@@ -49,8 +41,8 @@ class Interpolation:
 
     def interp_linear(
         self,
-        points: Optional[Sequence[Tuple[float, float, float]]] = None,
-        cell_size: Union[Tuple[float, float], float, None] = None,
+        points: Sequence[tuple[float, float, float]] | None = None,
+        cell_size: tuple[float, float] | float | None = None,
         fill_value: float = np.nan,
         rescale: bool = False,
     ):
@@ -64,8 +56,8 @@ class Interpolation:
 
     def interp_nearest(
         self,
-        points: Optional[Sequence[Tuple[float, float, float]]] = None,
-        cell_size: Union[Tuple[float, float], float, None] = None,
+        points: Sequence[tuple[float, float, float]] | None = None,
+        cell_size: tuple[float, float] | float | None = None,
         rescale: bool = False,
         tree_options: Any = None,
     ):
@@ -79,13 +71,13 @@ class Interpolation:
 
     def interp_rbf(
         self,
-        points: Optional[Sequence[Tuple[float, float, float]]] = None,
-        cell_size: Union[Tuple[float, float], float, None] = None,
-        neighbors: Optional[int] = None,
+        points: Sequence[tuple[float, float, float]] | None = None,
+        cell_size: tuple[float, float] | float | None = None,
+        neighbors: int | None = None,
         smoothing: float = 0,
         kernel: InterpolationKernel = "thin_plate_spline",
         epsilon: float = 1,
-        degree: Optional[int] = None,
+        degree: int | None = None,
     ):
         def f(coords, values):
             return RBFInterpolator(
@@ -100,10 +92,10 @@ class Interpolation:
 
 def interpolate(
     interpolator_factory: Callable[[ndarray, ndarray], Any],
-    points: Sequence[Tuple[float, float, float]],
-    extent: Tuple[float, float, float, float],
-    crs: Union[int, CRS],
-    cell_size: Union[Tuple[float, float], float],
+    points: Sequence[tuple[float, float, float]],
+    extent: tuple[float, float, float, float],
+    crs: int | CRS,
+    cell_size: tuple[float, float] | float,
 ):
     from glidergun._grid import grid
 

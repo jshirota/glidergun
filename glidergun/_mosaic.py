@@ -1,6 +1,7 @@
+import logging
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Dict, List, Optional, Tuple, overload
+from typing import overload
 
 import rasterio
 from rasterio.crs import CRS
@@ -9,6 +10,8 @@ from rasterio.transform import Affine, array_bounds
 from glidergun._grid import Grid, grid
 from glidergun._stack import Stack, stack
 from glidergun._types import Extent
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,10 +32,7 @@ class Mosaic:
         assert len(count_set) == 1, "Inconsistent number of bands"
         assert len(crs_set) == 1, "Inconsistent CRS"
         self.crs = crs_set.pop()
-        self.files: Dict[str, Extent] = {
-            f: Extent(*array_bounds(p.height, p.width, p.transform))
-            for f, p in profiles
-        }
+        self.files: dict[str, Extent] = {f: Extent(*array_bounds(p.height, p.width, p.transform)) for f, p in profiles}
         self.extent = Extent(
             min(e.xmin for e in self.files.values()),
             min(e.ymin for e in self.files.values()),
@@ -45,19 +45,19 @@ class Mosaic:
             with rasterio.open(f) as dataset:
                 yield f, SimpleNamespace(**dataset.profile)
 
-    def _read(self, extent: Tuple[float, float, float, float], index: int):
+    def _read(self, extent: tuple[float, float, float, float], index: int):
         for f, e in self.files.items():
             try:
                 if e.intersects(*extent):
                     yield grid(f, extent, index=index)
-            except ValueError:
-                pass
+            except Exception as ex:
+                logger.warning(f"Failed to read {f} for extent {extent}: {ex}")
 
     def tiles(
         self,
         width: float,
         height: float,
-        clip_extent: Optional[Tuple[float, float, float, float]] = None,
+        clip_extent: tuple[float, float, float, float] | None = None,
     ):
         extent = Extent(*clip_extent) if clip_extent else self.extent
         for e in extent.tiles(width, height):
@@ -66,20 +66,14 @@ class Mosaic:
             yield g
 
     @overload
-    def clip(
-        self, xmin: float, ymin: float, xmax: float, ymax: float, index: int = 1
-    ) -> Optional[Grid]: ...
+    def clip(self, xmin: float, ymin: float, xmax: float, ymax: float, index: int = 1) -> Grid | None: ...
 
     @overload
-    def clip(
-        self, xmin: float, ymin: float, xmax: float, ymax: float, index: Tuple[int, ...]
-    ) -> Optional[Stack]: ...
+    def clip(self, xmin: float, ymin: float, xmax: float, ymax: float, index: tuple[int, ...]) -> Stack | None: ...
 
     def clip(self, xmin: float, ymin: float, xmax: float, ymax: float, index=None):
         if not index or isinstance(index, int):
-            grids: List[Grid] = [
-                g for g in self._read((xmin, ymin, xmax, ymax), index or 1) if g
-            ]
+            grids: list[Grid] = [g for g in self._read((xmin, ymin, xmax, ymax), index or 1) if g]
             if grids:
                 return mosaic(*grids)
             return None

@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from numpy import ndarray
@@ -21,7 +22,7 @@ class Zonal:
             result = (zone_grid == zone_value).then(statistics, result)  # type: ignore
         return cast("Grid", result)
 
-    def zonal_count(self, value: Union[float, int], zone_grid: "Grid", **kwargs):
+    def zonal_count(self, value: float | int, zone_grid: "Grid", **kwargs):
         return self.zonal(lambda a: np.count_nonzero(a == value, **kwargs), zone_grid)
 
     def zonal_ptp(self, zone_grid: "Grid", **kwargs):

@@ -1,5 +1,6 @@
 from base64 import b64encode
-from typing import Any, Iterable, Optional, Union
+from collections.abc import Iterable
+from typing import Any
 
 import IPython
 import matplotlib.pyplot as plt
@@ -12,12 +13,12 @@ from glidergun._types import Extent
 
 
 def get_folium_map(
-    obj: Union[Grid, Stack],
+    obj: Grid | Stack,
     opacity: float,
     basemap,
     width: int,
     height: int,
-    attribution: Optional[str],
+    attribution: str | None,
     grayscale: bool = True,
     **kwargs,
 ):
@@ -26,9 +27,7 @@ def get_folium_map(
 
     obj_4326 = obj.project(4326)
 
-    extent = Extent(
-        obj_4326.xmin, max(obj_4326.ymin, -85), obj_4326.xmax, min(obj_4326.ymax, 85)
-    )
+    extent = Extent(obj_4326.xmin, max(obj_4326.ymin, -85), obj_4326.xmax, min(obj_4326.ymax, 85))
 
     if obj_4326.extent != extent:
         obj_4326 = obj_4326.clip(*extent)
@@ -44,11 +43,7 @@ def get_folium_map(
                 if basemap == "OpenStreetMap":
                     attribution = "&copy OpenStreetMap"
                 else:
-                    basemap = (
-                        "https://{s}.basemaps.cartocdn.com/"
-                        + basemap
-                        + "/{z}/{x}/{y}{r}.png"
-                    )
+                    basemap = "https://{s}.basemaps.cartocdn.com/" + basemap + "/{z}/{x}/{y}{r}.png"
                     attribution = "&copy OpenStreetMap &copy CARTO"
             tile_layer = folium.TileLayer(basemap, attr=attribution)
         else:
@@ -69,7 +64,7 @@ def get_folium_map(
                 tile_layer_{tile_layer._id}.getContainer()
                     .setAttribute("style", "filter: grayscale(100%); -webkit-filter: grayscale(100%);")
                 {{% endmacro %}}
-            """
+                """
             )
     else:
         folium_map = basemap
@@ -85,16 +80,17 @@ def get_folium_map(
     return folium_map
 
 
-def get_html(obj: Union[Grid, Stack, ArtistAnimation]):
+def get_html(obj: Grid | Stack | ArtistAnimation):
     if isinstance(obj, ArtistAnimation):
         return f"<div>{obj.to_jshtml()}</div>"
-    description = str(obj).replace("|", "<br />")
+    n = 50
+    description = "<br />".join(s if len(s) <= n else s[:n] + "..." for s in str(obj).split("|"))
     return f'<div><div>{description}</div><img src="{obj.img}" /><div>{obj.extent}</div></div>'
 
 
 def animate(
     grids: Iterable[Grid],
-    cmap: Union[ColorMap, Any] = "gray",
+    cmap: ColorMap | Any = "gray",
     interval: int = 100,
 ):
     first = next(iter(grids))
@@ -128,8 +124,8 @@ if ipython := IPython.get_ipython():  # type: ignore
                     {"".join(f"<td>{get_html(item)}</td>" for item in items)}
                 </tr>
             </table>
-        """
-            if all(isinstance(item, (Grid, Stack)) for item in items)
+            """
+            if all(isinstance(item, (Grid | Stack)) for item in items)
             else f"{items}"
         ),
     )

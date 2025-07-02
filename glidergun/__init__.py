@@ -16,6 +16,5 @@ from glidergun._grid import (
 )
 from glidergun._literals import BaseMap, ColorMap, DataType, ResamplingMethod
 from glidergun._mosaic import Mosaic, mosaic
-from glidergun._prediction import load_model
 from glidergun._stack import Stack, stack
-from glidergun._types import CellSize, Defaults, Extent, PointValue
+from glidergun._types import CellSize, Extent, PointValue

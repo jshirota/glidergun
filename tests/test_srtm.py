@@ -91,14 +91,14 @@ def test_buffer_3():
 def test_clip():
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin + 0.02, ymin + 0.03, xmax - 0.04, ymax - 0.05
-    for a, b in zip(dem.clip(*extent).extent, extent):
+    for a, b in zip(dem.clip(*extent).extent, extent, strict=False):
         assert pytest.approx(a, 0.001) == b
 
 
 def test_clip_2():
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin - 0.02, ymin - 0.03, xmax + 0.04, ymax + 0.05
-    for a, b in zip(dem.clip(*extent).extent, extent):
+    for a, b in zip(dem.clip(*extent).extent, extent, strict=False):
         assert pytest.approx(a, 0.001) == b
 
 
@@ -333,11 +333,11 @@ def test_to_stack():
 
 def test_to_uint8_range():
     g1 = (dem * 100).to_uint8_range()
-    assert pytest.approx(g1.min, 0.001) == 1
-    assert pytest.approx(g1.max, 0.001) == 254
+    assert pytest.approx(g1.min, 0.001) == 0
+    assert pytest.approx(g1.max, 0.001) == 255
     g2 = ((dem.randomize() - 0.5) * 10000).to_uint8_range()
-    assert pytest.approx(g2.min, 0.001) == 1
-    assert pytest.approx(g2.max, 0.001) == 254
+    assert pytest.approx(g2.min, 0.001) == 0
+    assert pytest.approx(g2.max, 0.001) == 255
 
 
 def test_project():
@@ -371,7 +371,7 @@ def test_reclass():
     )
     assert pytest.approx(g.min, 0.001) == 1
     assert pytest.approx(g.max, 0.001) == 6
-    values = set([0, 1, 2, 3, 4, 5, 6])
+    values = {0, 1, 2, 3, 4, 5, 6}
     for _, value in g.to_polygons():
         assert value in values
 
@@ -426,9 +426,9 @@ def test_tan():
 def test_round():
     g = dem.resample(0.01).randomize()
     points = g.to_points()
-    for p1, p2 in zip(points, g.round().to_points()):
+    for p1, p2 in zip(points, g.round().to_points(), strict=False):
         assert pytest.approx(p2[2], 0.01) == round(p1[2])
-    for p1, p2 in zip(points, g.round(3).to_points()):
+    for p1, p2 in zip(points, g.round(3).to_points(), strict=False):
         assert pytest.approx(p2[2], 0.01) == round(p1[2], 3)
 
 
@@ -503,19 +503,15 @@ def test_mosaic_dataset():
 
     assert clip(8, 55, 9, 56).extent == pytest.approx((8, 55, 9, 56), 0.001)
     assert clip(8, 55, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
-    assert clip(8.2, 55.2, 9.2, 56.2).extent == pytest.approx(
-        (8.2, 55.2, 9.2, 56.0), 0.001
-    )
-    assert clip(7.5, 55, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
-    assert clip(8, 50, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
-    assert clip(8, 55, 15, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
-    assert clip(8, 55, 10, 60).extent == pytest.approx((8, 55, 10, 56), 0.001)
+    assert clip(8.2, 55.2, 9.2, 56.2).extent == pytest.approx((8.2, 55.2, 9.2, 56.2), 0.001)
+    assert clip(7.5, 55, 10, 56).extent == pytest.approx((7.5, 55, 10, 56), 0.001)
+    assert clip(8, 50, 10, 56).extent == pytest.approx((8, 50, 10, 56), 0.001)
+    assert clip(8, 55, 15, 56).extent == pytest.approx((8, 55, 15, 56), 0.001)
+    assert clip(8, 55, 10, 60).extent == pytest.approx((8, 55, 10, 60), 0.001)
 
 
 def test_mosaic_eager_vs_lazy():
-    g = mosaic(
-        grid("./.data/n55_e008_1arc_v3.bil"), grid("./.data/n55_e009_1arc_v3.bil")
-    )
+    g = mosaic(grid("./.data/n55_e008_1arc_v3.bil"), grid("./.data/n55_e009_1arc_v3.bil"))
     m = mosaic("./.data/n55_e008_1arc_v3.bil", "./.data/n55_e009_1arc_v3.bil")
 
     g1 = g.clip(8, 55, 8.5, 56)
@@ -543,14 +539,8 @@ def test_set_nan_2():
     g = dem.resample(0.02)
 
     assert g.is_less_than(1).then(np.nan, g).md5 == g.set_nan(g < 1).md5
-    assert (
-        g.resample(0.04).set_nan(g < 1).md5
-        == g.resample(0.04).set_nan(lambda g: g < 1).md5
-    )
-    assert (
-        g.resample(0.04).con(lambda g: g < 1, np.nan).md5
-        == g.resample(0.04).set_nan(lambda g: g < 1).md5
-    )
+    assert g.resample(0.04).set_nan(g < 1).md5 == g.resample(0.04).set_nan(lambda g: g < 1).md5
+    assert g.resample(0.04).con(lambda g: g < 1, np.nan).md5 == g.resample(0.04).set_nan(lambda g: g < 1).md5
 
 
 def test_capping():
@@ -656,10 +646,9 @@ def test_tiling_2():
     g2 = None
 
     folder = ".output/test2"
-    for tile in g1.tiles(0.1, 0.1):
-        print(tile.extent)
-        name = f"{folder}/{tile.extent}.tif"
-        tile.save(name)
+    for e in g1.extent.tiles(0.1, 0.1):
+        name = f"{folder}/{e}.tif"
+        g1.clip(*e).save(name)
         g2 = g2.mosaic(grid(name)) if g2 else grid(name)
 
     assert g2
@@ -703,3 +692,7 @@ def test_idw():
     assert g4.has_nan
     assert g4.min == 0
     assert g4.max == 0
+
+
+def test_bytes():
+    assert grid(dem.to_bytes()).md5 == dem.md5
