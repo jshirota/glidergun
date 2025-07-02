@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Callable, NamedTuple, Protocol, Tuple, Union
+from typing import Any, Callable, NamedTuple, Protocol
 
 from numpy import ndarray
 from rasterio.crs import CRS
@@ -16,7 +16,7 @@ class GridCore:
 
 
 class Defaults:
-    display: Union[ColorMap, Any] = "gray"
+    display: ColorMap | Any = "gray"
     annotation_threshold: int = 12
 
 
@@ -106,5 +106,5 @@ class Scaler(Protocol):
     fit_transform: Callable
 
 
-def show(obj: Tuple[float, ...]) -> str:
+def show(obj: tuple[float, ...]) -> str:
     return f"({', '.join(map(lambda n: str(round(n, 6)), obj))})"
