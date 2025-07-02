@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Dict, List, Optional, Tuple, overload
+from typing import overload
 
 import rasterio
 from rasterio.crs import CRS
@@ -29,7 +29,7 @@ class Mosaic:
         assert len(count_set) == 1, "Inconsistent number of bands"
         assert len(crs_set) == 1, "Inconsistent CRS"
         self.crs = crs_set.pop()
-        self.files: Dict[str, Extent] = {
+        self.files: dict[str, Extent] = {
             f: Extent(*array_bounds(p.height, p.width, p.transform))
             for f, p in profiles
         }
@@ -45,7 +45,7 @@ class Mosaic:
             with rasterio.open(f) as dataset:
                 yield f, SimpleNamespace(**dataset.profile)
 
-    def _read(self, extent: Tuple[float, float, float, float], index: int):
+    def _read(self, extent: tuple[float, float, float, float], index: int):
         for f, e in self.files.items():
             try:
                 if e.intersects(*extent):
@@ -57,7 +57,7 @@ class Mosaic:
         self,
         width: float,
         height: float,
-        clip_extent: Optional[Tuple[float, float, float, float]] = None,
+        clip_extent: tuple[float, float, float, float] | None = None,
     ):
         extent = Extent(*clip_extent) if clip_extent else self.extent
         for e in extent.tiles(width, height):
@@ -68,16 +68,16 @@ class Mosaic:
     @overload
     def clip(
         self, xmin: float, ymin: float, xmax: float, ymax: float, index: int = 1
-    ) -> Optional[Grid]: ...
+    ) -> Grid | None: ...
 
     @overload
     def clip(
-        self, xmin: float, ymin: float, xmax: float, ymax: float, index: Tuple[int, ...]
-    ) -> Optional[Stack]: ...
+        self, xmin: float, ymin: float, xmax: float, ymax: float, index: tuple[int, ...]
+    ) -> Stack | None: ...
 
     def clip(self, xmin: float, ymin: float, xmax: float, ymax: float, index=None):
         if not index or isinstance(index, int):
-            grids: List[Grid] = [
+            grids: list[Grid] = [
                 g for g in self._read((xmin, ymin, xmax, ymax), index or 1) if g
             ]
             if grids:
