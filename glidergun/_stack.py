@@ -1,54 +1,69 @@
+import contextlib
 import dataclasses
 from base64 import b64encode
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import cached_property
 from io import BytesIO
-from typing import Any, Callable, Iterator, List, Optional, Tuple, Union, overload
+from typing import Any, Union
 
 import numpy as np
 import rasterio
 from matplotlib import pyplot as plt
 from rasterio import DatasetReader
 from rasterio.crs import CRS
-from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
+from shapely.geometry import mapping
 
 from glidergun._grid import (
     Extent,
     Grid,
     _metadata,
-    _read,
     con,
+    from_dataset,
+    grid,
     pca,
     standardize,
 )
 from glidergun._literals import BaseMap, DataType
 from glidergun._types import Scaler
-from glidergun._utils import create_directory, get_crs, get_nodata_value
+from glidergun._utils import create_directory, get_crs, get_driver, get_nodata_value
 
 Operand = Union["Stack", Grid, float, int]
 
 
 @dataclass(frozen=True)
+class SamResult:
+    prompt: str
+    mask: Grid
+    score: float
+
+    def to_polygon(self, crs: int | CRS):
+        s = self.mask.project(crs) if crs else self.mask
+        return s.to_polygons()[0][0]
+
+
+@dataclass(frozen=True)
 class Stack:
-    grids: Tuple[Grid, ...]
-    display: Tuple[int, int, int] = (1, 2, 3)
+    grids: tuple[Grid, ...]
+    display: tuple[int, int, int] = (1, 2, 3)
 
     def __repr__(self):
-        g = self.grids[0]
-        return f"crs: {g.crs} | count: {len(self.grids)} | rgb: {self.display}"
+        return (
+            f"image: {self.width}x{self.height} {self.dtype} | "
+            + f"crs: {self.crs} | "
+            + f"count: {len(self.grids)} | "
+            + f"rgb: {self.display}"
+        )
 
-    def _thumbnail(self, figsize: Optional[Tuple[float, float]] = None):
+    def _thumbnail(self, figsize: tuple[float, float] | None = None):
         with BytesIO() as buffer:
             figure = plt.figure(figsize=figsize, frameon=False)
             axes = figure.add_axes((0, 0, 1, 1))
             axes.axis("off")
             obj = self.to_uint8_range()
-            rgb = [
-                obj.grids[i - 1].data
-                for i in (self.display if self.display else (1, 2, 3))
-            ]
+            rgb = [obj.grids[i - 1].data for i in (self.display if self.display else (1, 2, 3))]
             alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
             plt.imshow(np.dstack([*[np.asanyarray(g, "uint8") for g in rgb], alpha]))
             plt.savefig(buffer, bbox_inches="tight", pad_inches=0)
@@ -63,6 +78,18 @@ class Stack:
     @property
     def crs(self) -> CRS:
         return self.grids[0].crs
+
+    @cached_property
+    def width(self) -> int:
+        return self.grids[0].width
+
+    @cached_property
+    def height(self) -> int:
+        return self.grids[0].height
+
+    @cached_property
+    def dtype(self) -> DataType:
+        return self.grids[0].dtype
 
     @property
     def xmin(self) -> float:
@@ -85,7 +112,7 @@ class Stack:
         return self.grids[0].extent
 
     @property
-    def md5s(self) -> Tuple[str, ...]:
+    def md5s(self) -> tuple[str, ...]:
         return tuple(g.md5 for g in self.grids)
 
     def __add__(self, n: Operand):
@@ -149,14 +176,14 @@ class Stack:
     __rge__ = __le__
 
     def __eq__(self, n: object):
-        if not isinstance(n, (Grid, float, int)):
+        if not isinstance(n, (Grid | float | int)):
             return NotImplemented
         return self._apply(n, lambda g, n: g.__eq__(n))
 
     __req__ = __eq__
 
     def __ne__(self, n: object):
-        if not isinstance(n, (Grid, float, int)):
+        if not isinstance(n, (Grid | float | int)):
             return NotImplemented
         return self._apply(n, lambda g, n: g.__ne__(n))
 
@@ -210,7 +237,10 @@ class Stack:
     def to_uint8_range(self):
         return self.each(lambda g: g.to_uint8_range())
 
-    def color(self, rgb: Tuple[int, int, int]):
+    def to_rgb_array(self):
+        return np.stack([g.to_uint8_range().data.astype("uint8") for g in self.grids[:3]], axis=-1)
+
+    def color(self, rgb: tuple[int, int, int]):
         valid = set(range(1, len(self.grids) + 1))
         if set(rgb) - valid:
             raise ValueError("Invalid bands specified.")
@@ -219,37 +249,25 @@ class Stack:
     def map(
         self,
         opacity: float = 1.0,
-        basemap: Union[BaseMap, Any, None] = None,
+        basemap: BaseMap | Any | None = None,
         width: int = 800,
         height: int = 600,
-        attribution: Optional[str] = None,
+        attribution: str | None = None,
         grayscale: bool = True,
         **kwargs,
     ):
         from glidergun._display import get_folium_map
 
-        return get_folium_map(
-            self, opacity, basemap, width, height, attribution, grayscale, **kwargs
-        )
+        return get_folium_map(self, opacity, basemap, width, height, attribution, grayscale, **kwargs)
 
     def each(self, func: Callable[[Grid], Grid]):
         return stack(*map(func, self.grids))
 
-    def georeference(
-        self,
-        xmin: float,
-        ymin: float,
-        xmax: float,
-        ymax: float,
-        crs: Union[int, CRS] = 4326,
-    ):
+    def georeference(self, xmin: float, ymin: float, xmax: float, ymax: float, crs: int | CRS = 4326):
         return self.each(lambda g: g.georeference(xmin, ymin, xmax, ymax, crs))
 
     def tiles(self, width: float, height: float):
-        return (
-            stack(*grids)
-            for grids in zip(*(g.tiles(width, height) for g in self.grids))
-        )
+        return (stack(*grids) for grids in zip(*(g.tiles(width, height) for g in self.grids), strict=False))
 
     def clip(self, xmin: float, ymin: float, xmax: float, ymax: float):
         return self.each(lambda g: g.clip(xmin, ymin, xmax, ymax))
@@ -263,23 +281,47 @@ class Stack:
     def pca(self, n_components: int = 3):
         return stack(*pca(n_components, *self.grids))
 
-    def project(
-        self, crs: Union[int, CRS], resampling: Resampling = Resampling.nearest
-    ):
+    def project(self, crs: int | CRS, resampling: Resampling = Resampling.nearest):
         if get_crs(crs).wkt == self.crs.wkt:
             return self
         return self.each(lambda g: g.project(crs, resampling))
 
-    def resample(
-        self,
-        cell_size: Union[Tuple[float, float], float],
-        resampling: Resampling = Resampling.nearest,
-    ):
+    def resample(self, cell_size: tuple[float, float] | float, resampling: Resampling = Resampling.nearest):
         return self.each(lambda g: g.resample(cell_size, resampling))
+
+    def sam3(self, prompt: str) -> list[SamResult]:
+        from PIL import Image
+        from sam3.model.sam3_image_processor import Sam3Processor
+        from sam3.model_builder import build_sam3_image_model
+
+        model = build_sam3_image_model()
+        processor = Sam3Processor(model)
+        Image.MAX_IMAGE_PIXELS = None
+        image = Image.fromarray(self.to_rgb_array())
+        output = processor.set_text_prompt(prompt, processor.set_image(image))
+        masks, scores = output["masks"], output["scores"]
+        results = []
+        for mask, score in zip(masks.cpu().numpy(), scores.cpu().numpy(), strict=True):
+            g = grid(mask[0], extent=self.extent, crs=self.crs).set_nan(0)
+            results.append(SamResult(prompt, g.clip(*g.buffer(1, 1).data_extent), float(score)))
+        return results
+
+    def sam3_geojson(self, *prompt: str) -> dict[str, Any]:
+        return {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": mapping(result.to_polygon(4326)),
+                    "properties": {"id": i + 1, "prompt": result.prompt, "score": result.score},
+                }
+                for i, result in enumerate(r for p in prompt for r in self.sam3(p))
+            ],
+        }
 
     def zip_with(self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid]):
         grids = []
-        for grid1, grid2 in zip(self.grids, other_stack.grids):
+        for grid1, grid2 in zip(self.grids, other_stack.grids, strict=False):
             grid1, grid2 = standardize(grid1, grid2)
             grids.append(func(grid1, grid2))
         return stack(*grids)
@@ -290,17 +332,12 @@ class Stack:
     def type(self, dtype: DataType):
         return self.each(lambda g: g.type(dtype))
 
-    @overload
-    def save(
-        self, file: str, dtype: Optional[DataType] = None, driver: str = ""
-    ) -> None: ...
+    def to_bytes(self, dtype: DataType | None = None, driver: str = "") -> bytes:
+        with MemoryFile() as memory_file:
+            self.save(memory_file, dtype, driver)
+            return memory_file.read()
 
-    @overload
-    def save(  # type: ignore
-        self, file: MemoryFile, dtype: Optional[DataType] = None, driver: str = ""
-    ) -> None: ...
-
-    def save(self, file, dtype: Optional[DataType] = None, driver: str = ""):
+    def save(self, file: str | MemoryFile, dtype: DataType | None = None, driver: str = ""):
         if isinstance(file, str) and (
             file.lower().endswith(".jpg")
             or file.lower().endswith(".kml")
@@ -324,7 +361,7 @@ class Stack:
             with rasterio.open(
                 file,
                 "w",
-                driver=driver if driver else driver_from_extension(file),
+                driver=driver or get_driver(file),
                 count=len(grids),
                 dtype=dtype,
                 nodata=nodata,
@@ -334,7 +371,7 @@ class Stack:
                     dataset.write(grid.data, index + 1)
         elif isinstance(file, MemoryFile):
             with file.open(
-                driver=driver if driver else "GTiff",
+                driver=driver or "COG",
                 count=len(grids),
                 dtype=dtype,
                 nodata=nodata,
@@ -344,78 +381,41 @@ class Stack:
                     dataset.write(grid.data, index + 1)
 
 
-@overload
-def stack(*grids: str) -> Stack:
-    """Creates a new stack from file paths.
+def stack(*grids: Grid | str | DatasetReader | bytes | MemoryFile) -> Stack:
+    bands: list[Grid] = []
 
-    Args:
-        grids: File paths.
-
-    Returns:
-        Stack: A new stack.
-    """
-    ...
-
-
-@overload
-def stack(*grids: rasterio.DatasetReader) -> Stack:  # type: ignore
-    """Creates a new stack from data readers.
-
-    Args:
-        grids: Data readers.
-
-    Returns:
-        Stack: A new stack.
-    """
-    ...
-
-
-@overload
-def stack(*grids: MemoryFile) -> Stack:  # type: ignore
-    """Creates a new stack from memory files.
-
-    Args:
-        grids: Memory files.
-
-    Returns:
-        Stack: A new stack.
-    """
-    ...
-
-
-@overload
-def stack(*grids: Grid) -> Stack:
-    """Creates a new stack from grids.
-
-    Args:
-        grids: Grids.
-
-    Returns:
-        Stack: A new stack.
-    """
-    ...
-
-
-def stack(*grids) -> Stack:
-    bands: List[Grid] = []
-
-    for grid in grids:
-        if isinstance(grid, DatasetReader):
-            bands.extend(_read_grids(grid))
-        elif isinstance(grid, str):
-            with rasterio.open(grid) as dataset:
+    for g in grids:
+        if isinstance(g, str):
+            with rasterio.open(g) as dataset:
                 bands.extend(_read_grids(dataset))
-        elif isinstance(grid, MemoryFile):
-            with grid.open() as dataset:
+        elif isinstance(g, DatasetReader):
+            bands.extend(_read_grids(g))
+        elif isinstance(g, bytes):
+            with MemoryFile(g) as memory_file, memory_file.open() as dataset:
                 bands.extend(_read_grids(dataset))
-        elif isinstance(grid, Grid):
-            bands.append(grid)
+        elif isinstance(g, MemoryFile):
+            with g.open() as dataset:
+                bands.extend(_read_grids(dataset))
+        elif isinstance(g, Grid):
+            bands.append(g)
 
-    crs = set(g.crs for g in bands)
+    width = {g.width for g in bands}
+    if len(width) > 1:
+        raise ValueError("All grids must have the same width.")
+
+    height = {g.height for g in bands}
+    if len(height) > 1:
+        raise ValueError("All grids must have the same height.")
+
+    dtype = {g.dtype for g in bands}
+    if len(dtype) > 1:
+        raise ValueError("All grids must have the same data type.")
+
+    crs = {g.crs for g in bands}
     if len(crs) > 1:
         raise ValueError("All grids must have the same CRS.")
 
-    extent = set(g.extent for g in bands)
+    extent = {g.extent for g in bands}
     if len(extent) > 1:
         raise ValueError("All grids must have the same extent.")
 
@@ -429,6 +429,5 @@ def _read_grids(dataset) -> Iterator[Grid]:
                 yield from _read_grids(subdataset)
     elif dataset.indexes:
         for index in dataset.indexes:
-            grid = _read(dataset, index, None)
-            if grid:
-                yield grid
+            with contextlib.suppress(Exception):
+                yield from_dataset(dataset, None, None, None, index)

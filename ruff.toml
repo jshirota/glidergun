@@ -1,0 +1,42 @@
+# Ruff configuration
+# https://docs.astral.sh/ruff/
+
+# Exclude common directories
+extend-exclude = ["__pycache__", ".venv", "build", "dist"]
+
+# Set the line length
+line-length = 120
+
+# Target Python 3.12+
+target-version = "py312"
+
+[lint]
+# Enable recommended rules
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+
+# Ignore specific rules if needed
+ignore = []
+
+# Allow autofix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
+
+[format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces
+indent-style = "space"
+
+# Use Unix line endings
+line-ending = "auto"
