@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, List, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 import numpy as np
 from numpy import ndarray
@@ -31,7 +31,7 @@ class Focal:
 
     def focal_generic(
         self,
-        func: Callable[[List[float]], float],
+        func: Callable[[list[float]], float],
         buffer: int = 1,
         circle: bool = False,
         ignore_nan: bool = True,
@@ -47,7 +47,7 @@ class Focal:
 
     def focal_count(
         self,
-        value: Union[float, int],
+        value: float | int,
         buffer: int = 1,
         circle: bool = False,
         max_workers: int = 1,

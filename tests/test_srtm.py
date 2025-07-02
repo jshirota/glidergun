@@ -333,11 +333,11 @@ def test_to_stack():
 
 def test_to_uint8_range():
     g1 = (dem * 100).to_uint8_range()
-    assert pytest.approx(g1.min, 0.001) == 1
-    assert pytest.approx(g1.max, 0.001) == 254
+    assert pytest.approx(g1.min, 0.001) == 0
+    assert pytest.approx(g1.max, 0.001) == 255
     g2 = ((dem.randomize() - 0.5) * 10000).to_uint8_range()
-    assert pytest.approx(g2.min, 0.001) == 1
-    assert pytest.approx(g2.max, 0.001) == 254
+    assert pytest.approx(g2.min, 0.001) == 0
+    assert pytest.approx(g2.max, 0.001) == 255
 
 
 def test_project():
@@ -504,12 +504,12 @@ def test_mosaic_dataset():
     assert clip(8, 55, 9, 56).extent == pytest.approx((8, 55, 9, 56), 0.001)
     assert clip(8, 55, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
     assert clip(8.2, 55.2, 9.2, 56.2).extent == pytest.approx(
-        (8.2, 55.2, 9.2, 56.0), 0.001
+        (8.2, 55.2, 9.2, 56.2), 0.001
     )
-    assert clip(7.5, 55, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
-    assert clip(8, 50, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
-    assert clip(8, 55, 15, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
-    assert clip(8, 55, 10, 60).extent == pytest.approx((8, 55, 10, 56), 0.001)
+    assert clip(7.5, 55, 10, 56).extent == pytest.approx((7.5, 55, 10, 56), 0.001)
+    assert clip(8, 50, 10, 56).extent == pytest.approx((8, 50, 10, 56), 0.001)
+    assert clip(8, 55, 15, 56).extent == pytest.approx((8, 55, 15, 56), 0.001)
+    assert clip(8, 55, 10, 60).extent == pytest.approx((8, 55, 10, 60), 0.001)
 
 
 def test_mosaic_eager_vs_lazy():

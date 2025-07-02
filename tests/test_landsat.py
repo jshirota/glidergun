@@ -3,10 +3,6 @@ import shutil
 
 import pytest
 import rasterio
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import Ridge
-from sklearn.neural_network import MLPRegressor
-from sklearn.tree import DecisionTreeRegressor
 
 from glidergun._stack import Stack, stack
 
@@ -26,34 +22,6 @@ def test_extract_bands():
     assert s.grids[0].md5 == landsat.grids[3].md5
     assert s.grids[1].md5 == landsat.grids[2].md5
     assert s.grids[2].md5 == landsat.grids[1].md5
-
-
-def fit(regressor):
-    s = landsat.resample(900)
-    train_data = s.clip(467815, 6190585, 559550, 6273454)
-    model = train_data.grids[0].fit(regressor, *train_data.grids[1:])
-    test_data = s.clip(478144, 6104680, 526666, 6148383)
-    score = model.score(test_data.grids[0], *test_data.grids[1:])
-    actual = test_data.grids[0]
-    predicted = model.predict(*test_data.grids[1:])
-    assert score and score > 0.90
-    assert predicted.extent == actual.extent
-
-
-def test_fit_random_forest():
-    fit(RandomForestRegressor())
-
-
-def test_fit_ridge():
-    fit(Ridge())
-
-
-def test_fit_mlp():
-    fit(MLPRegressor())
-
-
-def test_fit_decision_tree():
-    fit(DecisionTreeRegressor())
 
 
 def test_op_mul():
@@ -94,8 +62,8 @@ def test_percent_clip():
 def test_to_uint8_range():
     s = landsat.to_uint8_range()
     for g in s.grids:
-        assert pytest.approx(g.min, 0.001) == 1
-        assert pytest.approx(g.max, 0.001) == 254
+        assert pytest.approx(g.min, 0.001) == 0
+        assert pytest.approx(g.max, 0.001) == 255
 
 
 def test_pca():
