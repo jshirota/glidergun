@@ -3,14 +3,13 @@ from base64 import b64encode
 from dataclasses import dataclass
 from functools import cached_property
 from io import BytesIO
-from typing import Any, Callable, Iterator, List, Optional, Tuple, Union, overload
+from typing import Any, Callable, Iterator, Union, overload
 
 import numpy as np
 import rasterio
 from matplotlib import pyplot as plt
 from rasterio import DatasetReader
 from rasterio.crs import CRS
-from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
 
@@ -20,26 +19,27 @@ from glidergun._grid import (
     _metadata,
     _read,
     con,
+    grid,
     pca,
     standardize,
 )
 from glidergun._literals import BaseMap, DataType
 from glidergun._types import Scaler
-from glidergun._utils import create_directory, get_crs, get_nodata_value
+from glidergun._utils import create_directory, get_crs, get_driver, get_nodata_value
 
 Operand = Union["Stack", Grid, float, int]
 
 
 @dataclass(frozen=True)
 class Stack:
-    grids: Tuple[Grid, ...]
-    display: Tuple[int, int, int] = (1, 2, 3)
+    grids: tuple[Grid, ...]
+    display: tuple[int, int, int] = (1, 2, 3)
 
     def __repr__(self):
         g = self.grids[0]
         return f"crs: {g.crs} | count: {len(self.grids)} | rgb: {self.display}"
 
-    def _thumbnail(self, figsize: Optional[Tuple[float, float]] = None):
+    def _thumbnail(self, figsize: tuple[float, float] | None = None):
         with BytesIO() as buffer:
             figure = plt.figure(figsize=figsize, frameon=False)
             axes = figure.add_axes((0, 0, 1, 1))
@@ -85,7 +85,7 @@ class Stack:
         return self.grids[0].extent
 
     @property
-    def md5s(self) -> Tuple[str, ...]:
+    def md5s(self) -> tuple[str, ...]:
         return tuple(g.md5 for g in self.grids)
 
     def __add__(self, n: Operand):
@@ -210,7 +210,7 @@ class Stack:
     def to_uint8_range(self):
         return self.each(lambda g: g.to_uint8_range())
 
-    def color(self, rgb: Tuple[int, int, int]):
+    def color(self, rgb: tuple[int, int, int]):
         valid = set(range(1, len(self.grids) + 1))
         if set(rgb) - valid:
             raise ValueError("Invalid bands specified.")
@@ -219,10 +219,10 @@ class Stack:
     def map(
         self,
         opacity: float = 1.0,
-        basemap: Union[BaseMap, Any, None] = None,
+        basemap: BaseMap | Any | None = None,
         width: int = 800,
         height: int = 600,
-        attribution: Optional[str] = None,
+        attribution: str | None = None,
         grayscale: bool = True,
         **kwargs,
     ):
@@ -241,7 +241,7 @@ class Stack:
         ymin: float,
         xmax: float,
         ymax: float,
-        crs: Union[int, CRS] = 4326,
+        crs: int | CRS = 4326,
     ):
         return self.each(lambda g: g.georeference(xmin, ymin, xmax, ymax, crs))
 
@@ -263,19 +263,25 @@ class Stack:
     def pca(self, n_components: int = 3):
         return stack(*pca(n_components, *self.grids))
 
-    def project(
-        self, crs: Union[int, CRS], resampling: Resampling = Resampling.nearest
-    ):
+    def project(self, crs: int | CRS, resampling: Resampling = Resampling.nearest):
         if get_crs(crs).wkt == self.crs.wkt:
             return self
         return self.each(lambda g: g.project(crs, resampling))
 
     def resample(
         self,
-        cell_size: Union[Tuple[float, float], float],
+        cell_size: tuple[float, float] | float,
         resampling: Resampling = Resampling.nearest,
     ):
         return self.each(lambda g: g.resample(cell_size, resampling))
+
+    def sam(self, mask_generator) -> tuple[Grid, ...]:
+        masks = mask_generator.generate(
+            np.stack([g.data for g in self.grids[:3]], axis=-1)
+        )
+        return tuple(
+            grid(m["segmentation"], extent=self.extent, crs=self.crs) for m in masks
+        )
 
     def zip_with(self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid]):
         grids = []
@@ -292,15 +298,15 @@ class Stack:
 
     @overload
     def save(
-        self, file: str, dtype: Optional[DataType] = None, driver: str = ""
+        self, file: str, dtype: DataType | None = None, driver: str = ""
     ) -> None: ...
 
     @overload
     def save(  # type: ignore
-        self, file: MemoryFile, dtype: Optional[DataType] = None, driver: str = ""
+        self, file: MemoryFile, dtype: DataType | None = None, driver: str = ""
     ) -> None: ...
 
-    def save(self, file, dtype: Optional[DataType] = None, driver: str = ""):
+    def save(self, file, dtype: DataType | None = None, driver: str = ""):
         if isinstance(file, str) and (
             file.lower().endswith(".jpg")
             or file.lower().endswith(".kml")
@@ -324,7 +330,7 @@ class Stack:
             with rasterio.open(
                 file,
                 "w",
-                driver=driver if driver else driver_from_extension(file),
+                driver=driver or get_driver(file),
                 count=len(grids),
                 dtype=dtype,
                 nodata=nodata,
@@ -334,7 +340,7 @@ class Stack:
                     dataset.write(grid.data, index + 1)
         elif isinstance(file, MemoryFile):
             with file.open(
-                driver=driver if driver else "GTiff",
+                driver=driver or "COG",
                 count=len(grids),
                 dtype=dtype,
                 nodata=nodata,
@@ -397,19 +403,19 @@ def stack(*grids: Grid) -> Stack:
 
 
 def stack(*grids) -> Stack:
-    bands: List[Grid] = []
+    bands: list[Grid] = []
 
-    for grid in grids:
-        if isinstance(grid, DatasetReader):
-            bands.extend(_read_grids(grid))
-        elif isinstance(grid, str):
-            with rasterio.open(grid) as dataset:
+    for g in grids:
+        if isinstance(g, DatasetReader):
+            bands.extend(_read_grids(g))
+        elif isinstance(g, str):
+            with rasterio.open(g) as dataset:
                 bands.extend(_read_grids(dataset))
-        elif isinstance(grid, MemoryFile):
-            with grid.open() as dataset:
+        elif isinstance(g, MemoryFile):
+            with g.open() as dataset:
                 bands.extend(_read_grids(dataset))
-        elif isinstance(grid, Grid):
-            bands.append(grid)
+        elif isinstance(g, Grid):
+            bands.append(g)
 
     crs = set(g.crs for g in bands)
     if len(crs) > 1:
