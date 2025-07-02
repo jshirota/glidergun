@@ -36,7 +36,7 @@ band5 = grid(".data/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B5.TIF")
 
 ndvi = (band5 - band4) / (band5 + band4)
 
-ndvi.plot("gist_earth")
+ndvi.color("gist_earth")
 ```
 
 ![](image2.png)

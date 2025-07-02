@@ -1,5 +1,5 @@
 from base64 import b64encode
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Iterable
 
 import IPython
 import matplotlib.pyplot as plt
@@ -12,12 +12,12 @@ from glidergun._types import Extent
 
 
 def get_folium_map(
-    obj: Union[Grid, Stack],
+    obj: Grid | Stack,
     opacity: float,
     basemap,
     width: int,
     height: int,
-    attribution: Optional[str],
+    attribution: str | None,
     grayscale: bool = True,
     **kwargs,
 ):
@@ -85,7 +85,7 @@ def get_folium_map(
     return folium_map
 
 
-def get_html(obj: Union[Grid, Stack, ArtistAnimation]):
+def get_html(obj: Grid | Stack | ArtistAnimation):
     if isinstance(obj, ArtistAnimation):
         return f"<div>{obj.to_jshtml()}</div>"
     description = str(obj).replace("|", "<br />")
@@ -94,7 +94,7 @@ def get_html(obj: Union[Grid, Stack, ArtistAnimation]):
 
 def animate(
     grids: Iterable[Grid],
-    cmap: Union[ColorMap, Any] = "gray",
+    cmap: ColorMap | Any = "gray",
     interval: int = 100,
 ):
     first = next(iter(grids))

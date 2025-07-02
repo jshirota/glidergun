@@ -1,6 +1,5 @@
 import re
 from pathlib import Path
-from typing import Union
 
 import numpy as np
 from numpy import ndarray
@@ -12,7 +11,7 @@ def create_directory(file_path: str):
     Path(directory).mkdir(parents=True, exist_ok=True)
 
 
-def get_crs(crs: Union[int, CRS]):
+def get_crs(crs: int | CRS):
     return CRS.from_epsg(crs) if isinstance(crs, int) else crs
 
 
@@ -26,7 +25,7 @@ def format_type(data: ndarray):
     return data
 
 
-def get_nodata_value(dtype: str) -> Union[float, int, None]:
+def get_nodata_value(dtype: str) -> float | int | None:
     if dtype == "bool":
         return None
     if dtype.startswith("float"):
