@@ -1,6 +1,7 @@
 import dataclasses
 import hashlib
 import logging
+import warnings
 from base64 import b64encode
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +18,7 @@ import rasterio.warp
 from numpy import arctan, arctan2, cos, gradient, ndarray, pi, sin, sqrt
 from rasterio import DatasetReader, features
 from rasterio.crs import CRS
+from rasterio.errors import NotGeoreferencedWarning
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine
 from rasterio.warp import Resampling, calculate_default_transform, reproject
@@ -376,7 +378,8 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         crs: int | CRS,
         resampling: Resampling | ResamplingMethod = "nearest",
     ) -> "Grid":
-        if get_crs(crs).wkt == self.crs.wkt:
+        crs = get_crs(crs)
+        if crs == self.crs:
             return self
         transform, width, height = calculate_default_transform(self.crs, crs, self.width, self.height, *self.extent)
         return self._reproject(
@@ -776,27 +779,29 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         if nodata is not None:
             g = con(g.is_nan(), nodata, g)
 
-        if isinstance(file, str):
-            create_directory(file)
-            with rasterio.open(
-                file,
-                "w",
-                driver=driver or get_driver(file),
-                count=1,
-                dtype=dtype,
-                nodata=nodata,
-                **_metadata(self),
-            ) as dataset:
-                dataset.write(g.data, 1)
-        elif isinstance(file, MemoryFile):
-            with file.open(
-                driver=driver or "COG",
-                count=1,
-                dtype=dtype,
-                nodata=nodata,
-                **_metadata(self),
-            ) as dataset:
-                dataset.write(g.data, 1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
+            if isinstance(file, str):
+                create_directory(file)
+                with rasterio.open(
+                    file,
+                    "w",
+                    driver=driver or get_driver(file),
+                    count=1,
+                    dtype=dtype,
+                    nodata=nodata,
+                    **_metadata(self),
+                ) as dataset:
+                    dataset.write(g.data, 1)
+            elif isinstance(file, MemoryFile):
+                with file.open(
+                    driver=driver or "COG",
+                    count=1,
+                    dtype=dtype,
+                    nodata=nodata,
+                    **_metadata(self),
+                ) as dataset:
+                    dataset.write(g.data, 1)
 
 
 @overload
@@ -1020,8 +1025,10 @@ def grid(
         case DatasetReader():
             return from_dataset(data, extent, crs, cell_size, index)  # type: ignore
         case str():
-            with rasterio.open(data) as dataset:
-                return from_dataset(dataset, extent, crs, cell_size, index)  # type: ignore
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
+                with rasterio.open(data) as dataset:
+                    return from_dataset(dataset, extent, crs, cell_size, index)  # type: ignore
         case bytes():
             with MemoryFile(data) as memory_file, memory_file.open() as dataset:
                 return from_dataset(dataset, extent, crs, cell_size, index)  # type: ignore
@@ -1029,16 +1036,16 @@ def grid(
             with data.open() as dataset:
                 return from_dataset(dataset, extent, crs, cell_size, index)  # type: ignore
         case ndarray():
-            return from_ndarray(data, extent or (0, 0, 1, 1), get_crs(crs or 4326))
+            return from_ndarray(data, extent or (0, 0, 1, 1), crs or 4326)
         case w, h if isinstance(w, int) and isinstance(h, int):
             data = np.arange(w * h).reshape(h, w)
-            return from_ndarray(data, extent or (0, 0, 1, 1), get_crs(crs or 4326))
+            return from_ndarray(data, extent or (0, 0, 1, 1), crs or 4326)
         case _:
             assert extent, "Extent is required."
             assert cell_size, "Cell size is required."
             if isinstance(data, (int | float)):
-                return from_constant(data, extent, get_crs(crs or 4326), cell_size)  # type: ignore
-            return from_shapes(data, extent, get_crs(crs or 4326), cell_size)  # type: ignore
+                return from_constant(data, extent, crs or 4326, cell_size)  # type: ignore
+            return from_shapes(data, extent, crs or 4326, cell_size)  # type: ignore
 
 
 def from_shapes(
@@ -1084,13 +1091,14 @@ def from_ndarray(
 def from_dataset(
     dataset: DatasetReader,
     extent: tuple[float, float, float, float] | None,
-    crs: CRS | None,
+    crs: int | CRS | None,
     cell_size: tuple[float, float] | float | None,
     index: int,
 ) -> Grid:
     if extent:
         xmin, ymin, xmax, ymax = extent
-        if crs:
+        if crs is not None:
+            crs = get_crs(crs)
             [xmin, xmax], [ymin, ymax], *_ = rasterio.warp.transform(crs, dataset.crs, [xmin, xmax], [ymin, ymax])
             extent = xmin, ymin, xmax, ymax
         w = int(dataset.profile.data["width"])

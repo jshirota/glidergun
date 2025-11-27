@@ -1,4 +1,6 @@
 # ruff: noqa: F401
+from rasterio.errors import NotGeoreferencedWarning
+
 from glidergun._display import animate
 from glidergun._grid import (
     Grid,

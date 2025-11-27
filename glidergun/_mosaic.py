@@ -1,10 +1,12 @@
 import logging
+import warnings
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import overload
 
 import rasterio
 from rasterio.crs import CRS
+from rasterio.errors import NotGeoreferencedWarning
 from rasterio.transform import Affine, array_bounds
 
 from glidergun._grid import Grid, grid
@@ -41,9 +43,11 @@ class Mosaic:
         )
 
     def _read_profiles(self, *files: str):
-        for f in files:
-            with rasterio.open(f) as dataset:
-                yield f, SimpleNamespace(**dataset.profile)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
+            for f in files:
+                with rasterio.open(f) as dataset:
+                    yield f, SimpleNamespace(**dataset.profile)
 
     def _read(self, extent: tuple[float, float, float, float], index: int):
         for f, e in self.files.items():
