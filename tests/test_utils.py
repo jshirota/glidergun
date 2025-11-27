@@ -87,7 +87,7 @@ def test_get_nodata_value_int64():
 
 
 def test_process_tiles():
-    g = grid(".data/n55_e008_1arc_v3.bil")
+    g = grid("tests/input/n55_e008_1arc_v3.bil")
 
     def assert_eq(g2):
         assert g2.md5 == g.md5

@@ -1,24 +1,27 @@
 import contextlib
 import dataclasses
 import logging
+import warnings
 from base64 import b64encode
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from io import BytesIO
-from typing import Any, Union
+from typing import Any, Union, overload
 
 import numpy as np
 import rasterio
 from matplotlib import pyplot as plt
 from rasterio import DatasetReader
 from rasterio.crs import CRS
+from rasterio.errors import NotGeoreferencedWarning, RasterioIOError
 from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
 from shapely.ops import unary_union
 
 from glidergun._grid import Extent, Grid, _metadata, con, from_dataset, grid, pca, standardize
 from glidergun._literals import BaseMap, DataType
+from glidergun._quadkey import get_tiles
 from glidergun._types import FeatureCollection, Scaler
 from glidergun._utils import create_directory, get_crs, get_driver, get_geojson, get_nodata_value
 
@@ -285,8 +288,6 @@ class Stack:
         return stack(*pca(n_components, *self.grids))
 
     def project(self, crs: int | CRS, resampling: Resampling = Resampling.nearest):
-        if get_crs(crs).wkt == self.crs.wkt:
-            return self
         return self.each(lambda g: g.project(crs, resampling))
 
     def resample(self, cell_size: tuple[float, float] | float, resampling: Resampling = Resampling.nearest):
@@ -373,81 +374,119 @@ class Stack:
         if nodata is not None:
             grids = tuple(con(g.is_nan(), float(nodata), g) for g in grids)
 
-        if isinstance(file, str):
-            create_directory(file)
-            with rasterio.open(
-                file,
-                "w",
-                driver=driver or get_driver(file),
-                count=len(grids),
-                dtype=dtype,
-                nodata=nodata,
-                **_metadata(self.grids[0]),
-            ) as dataset:
-                for index, grid in enumerate(grids):
-                    dataset.write(grid.data, index + 1)
-        elif isinstance(file, MemoryFile):
-            with file.open(
-                driver=driver or "COG",
-                count=len(grids),
-                dtype=dtype,
-                nodata=nodata,
-                **_metadata(self.grids[0]),
-            ) as dataset:
-                for index, grid in enumerate(grids):
-                    dataset.write(grid.data, index + 1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
+            if isinstance(file, str):
+                create_directory(file)
+                with rasterio.open(
+                    file,
+                    "w",
+                    driver=driver or get_driver(file),
+                    count=len(grids),
+                    dtype=dtype,
+                    nodata=nodata,
+                    **_metadata(self.grids[0]),
+                ) as dataset:
+                    for index, grid in enumerate(grids):
+                        dataset.write(grid.data, index + 1)
+            elif isinstance(file, MemoryFile):
+                with file.open(
+                    driver=driver or "COG",
+                    count=len(grids),
+                    dtype=dtype,
+                    nodata=nodata,
+                    **_metadata(self.grids[0]),
+                ) as dataset:
+                    for index, grid in enumerate(grids):
+                        dataset.write(grid.data, index + 1)
 
 
-def stack(*grids: Grid | str | DatasetReader | bytes | MemoryFile) -> Stack:
+@overload
+def stack(*data: Grid | str | DatasetReader | bytes | MemoryFile) -> Stack: ...
+
+
+@overload
+def stack(*data: str, extent: tuple[float, float, float, float], max_tiles: int = 10) -> Stack: ...
+
+
+def stack(
+    *data: Grid | str | DatasetReader | bytes | MemoryFile,
+    extent: tuple[float, float, float, float] | None = None,
+    crs: int | CRS | None = None,
+    max_tiles: int | None = None,
+) -> Stack:
     bands: list[Grid] = []
 
-    for g in grids:
+    for g in data:
         if isinstance(g, str):
-            with rasterio.open(g) as dataset:
-                bands.extend(_read_grids(dataset))
+            if g.startswith("https://") and "{" in g and "}" in g and extent:
+                return from_tile_service(g, extent, max_tiles or 10)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
+                with rasterio.open(g) as dataset:
+                    bands.extend(_read_grids(dataset, extent, crs))
         elif isinstance(g, DatasetReader):
-            bands.extend(_read_grids(g))
+            bands.extend(_read_grids(g, extent, crs))
         elif isinstance(g, bytes):
             with MemoryFile(g) as memory_file, memory_file.open() as dataset:
-                bands.extend(_read_grids(dataset))
+                bands.extend(_read_grids(dataset, extent, crs))
         elif isinstance(g, MemoryFile):
             with g.open() as dataset:
-                bands.extend(_read_grids(dataset))
+                bands.extend(_read_grids(dataset, extent, crs))
         elif isinstance(g, Grid):
             bands.append(g)
 
-    width = {g.width for g in bands}
-    if len(width) > 1:
-        raise ValueError("All grids must have the same width.")
+    def assert_unique(property: str):
+        values = {getattr(g, property) for g in bands}
+        if len(values) > 1:
+            raise ValueError(f"All grids must have the same {property}.")
 
-    height = {g.height for g in bands}
-    if len(height) > 1:
-        raise ValueError("All grids must have the same height.")
-
-    dtype = {g.dtype for g in bands}
-    if len(dtype) > 1:
-        raise ValueError("All grids must have the same data type.")
-
-    crs = {g.crs for g in bands}
-    if len(crs) > 1:
-        raise ValueError("All grids must have the same CRS.")
-
-    extent = {g.extent for g in bands}
-    if len(extent) > 1:
-        raise ValueError("All grids must have the same extent.")
+    assert_unique("width")
+    assert_unique("height")
+    assert_unique("dtype")
+    assert_unique("crs")
+    assert_unique("extent")
 
     return Stack(tuple(bands))
 
 
-def _read_grids(dataset) -> Iterator[Grid]:
+def _read_grids(dataset, extent: tuple[float, float, float, float] | None, crs: int | CRS | None) -> Iterator[Grid]:
+    crs = get_crs(crs) if crs else None
     if dataset.subdatasets:
-        for index, _ in enumerate(dataset.subdatasets):
-            with rasterio.open(dataset.subdatasets[index]) as subdataset:
-                yield from _read_grids(subdataset)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
+            for index, _ in enumerate(dataset.subdatasets):
+                with rasterio.open(dataset.subdatasets[index]) as subdataset:
+                    yield from _read_grids(subdataset, extent, crs)
     elif dataset.indexes:
         for index in dataset.indexes:
             with contextlib.suppress(Exception):
-                yield from_dataset(dataset, None, None, None, index)
+                yield from_dataset(dataset, extent, crs, None, index)
+
+
+def from_tile_service(url: str, extent: tuple[float, float, float, float], max_tiles: int, max_zoom: int = 24):
+    tiles = get_tiles(*extent, max_tiles, max_zoom)
+    r_mosaic, g_mosaic, b_mosaic = None, None, None
+
+    for i, (x, y, z, q, xmin, ymin, xmax, ymax) in enumerate(tiles):
+        logger.info(f"Processing {i + 1} of {len(tiles)} tiles...")
+        url2 = url.replace("{x}", str(x)).replace("{y}", str(y)).replace("{z}", str(z)).replace("{q}", q)
+        try:
+            s = stack(url2)
+        except RasterioIOError as ex:
+            if max_zoom < 18:
+                raise
+            logger.warning(f"Failed to load tile from {url2}: {ex}")
+            return from_tile_service(url, extent, max_tiles, max_zoom - 1)
+        r, g, b = s.georeference(xmin, ymin, xmax, ymax, 4326).grids
+        r_mosaic = r.mosaic(r_mosaic) if r_mosaic else r
+        g_mosaic = g.mosaic(g_mosaic) if g_mosaic else g
+        b_mosaic = b.mosaic(b_mosaic) if b_mosaic else b
+
+    if r_mosaic and g_mosaic and b_mosaic:
+        return stack(r_mosaic, g_mosaic, b_mosaic).clip(*extent).type("uint8", 0)
+
+    raise ValueError("No data found for the specified extent.")
 
 
 @lru_cache(maxsize=1)

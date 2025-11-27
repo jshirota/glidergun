@@ -8,7 +8,7 @@ import rasterio
 from glidergun._grid import Grid, con, grid
 from glidergun._mosaic import mosaic
 
-dem = grid("./.data/n55_e008_1arc_v3.bil")
+dem = grid("./tests/input/n55_e008_1arc_v3.bil")
 
 
 def test_distance_2():
@@ -210,7 +210,7 @@ def test_interp_rbf():
 
 
 def test_mosaic():
-    g1 = grid("./.data/n55_e009_1arc_v3.bil")
+    g1 = grid("./tests/input/n55_e009_1arc_v3.bil")
     g2 = dem.mosaic(g1)
     assert g2.crs == dem.crs
     xmin, ymin, xmax, ymax = g2.extent
@@ -448,7 +448,7 @@ def test_zonal():
 
 
 def save(g1: Grid, file: str, strict: bool = True):
-    folder = ".output/test1"
+    folder = "tests/output/temp1"
     file_path = f"{folder}/{file}"
     os.makedirs(folder, exist_ok=True)
     g1.save(file_path)
@@ -492,8 +492,8 @@ def test_save_png():
 
 def test_mosaic_dataset():
     m = mosaic(
-        "./.data/n55_e008_1arc_v3.bil",
-        "./.data/n55_e009_1arc_v3.bil",
+        "./tests/input/n55_e008_1arc_v3.bil",
+        "./tests/input/n55_e009_1arc_v3.bil",
     )
 
     def clip(xmin, ymin, xmax, ymax):
@@ -511,8 +511,8 @@ def test_mosaic_dataset():
 
 
 def test_mosaic_eager_vs_lazy():
-    g = mosaic(grid("./.data/n55_e008_1arc_v3.bil"), grid("./.data/n55_e009_1arc_v3.bil"))
-    m = mosaic("./.data/n55_e008_1arc_v3.bil", "./.data/n55_e009_1arc_v3.bil")
+    g = mosaic(grid("./tests/input/n55_e008_1arc_v3.bil"), grid("./tests/input/n55_e009_1arc_v3.bil"))
+    m = mosaic("./tests/input/n55_e008_1arc_v3.bil", "./tests/input/n55_e009_1arc_v3.bil")
 
     g1 = g.clip(8, 55, 8.5, 56)
     g2 = m.clip(8, 55, 8.5, 56)
@@ -522,8 +522,8 @@ def test_mosaic_eager_vs_lazy():
 
 def test_tiling():
     g = mosaic(
-        grid("./.data/n55_e008_1arc_v3.bil"),
-        grid("./.data/n55_e009_1arc_v3.bil"),
+        grid("./tests/input/n55_e008_1arc_v3.bil"),
+        grid("./tests/input/n55_e009_1arc_v3.bil"),
     )
 
     fmean = g.focal_mean(2)
@@ -645,7 +645,7 @@ def test_tiling_2():
     g1 = dem.resample(0.002)
     g2 = None
 
-    folder = ".output/test2"
+    folder = "tests/output/temp2"
     for e in g1.extent.tiles(0.1, 0.1):
         name = f"{folder}/{e}.tif"
         g1.clip(*e).save(name)
@@ -659,7 +659,7 @@ def test_tiling_2():
 
 
 def test_mosaic_tiling():
-    files = [".data/n55_e008_1arc_v3.bil", ".data/n55_e009_1arc_v3.bil"]
+    files = ["tests/input/n55_e008_1arc_v3.bil", "tests/input/n55_e009_1arc_v3.bil"]
     m = mosaic(*files)
     g = mosaic(*map(grid, files))
     e = (8.678, 55.2, 8.8, 55.4)

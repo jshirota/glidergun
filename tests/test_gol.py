@@ -7,7 +7,7 @@ def tick(grid: Grid):
 
 
 def test_glidergun30():
-    gosper = tick(grid(".data/glidergun30.asc"))
+    gosper = tick(grid("tests/input/glidergun30.asc"))
     md5s = set()
     while gosper.md5 not in md5s:
         md5s.add(gosper.md5)
@@ -16,7 +16,7 @@ def test_glidergun30():
 
 
 def test_glidergun15():
-    gosper = tick(grid(".data/glidergun15.asc"))
+    gosper = tick(grid("tests/input/glidergun15.asc"))
     md5s = set()
     while gosper.md5 not in md5s:
         md5s.add(gosper.md5)

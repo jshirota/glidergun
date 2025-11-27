@@ -1,8 +1,8 @@
 {
     "python.analysis.typeCheckingMode": "standard",
-    "python.defaultInterpreterPath": ".venv",
+    "python.defaultInterpreterPath": "${workspaceFolder}/${env:OS:Windows_NT/.venv\\Scripts\\python.exe/.venv/bin/python}",
     "python.testing.pytestArgs": [
-        "."
+        "tests"
     ],
     "python.testing.pytestEnabled": true,
     "python.testing.unittestEnabled": false
