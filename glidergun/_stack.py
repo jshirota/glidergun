@@ -3,7 +3,7 @@ import dataclasses
 import logging
 import warnings
 from base64 import b64encode
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from io import BytesIO
@@ -36,8 +36,10 @@ class SamResult:
     masks: list["SamMask"]
     overview: "Stack"
 
-    def to_geojson(self, crs: int | CRS | None = 4326) -> FeatureCollection:
-        return get_geojson((m.to_polygon(crs), {"prompt": m.prompt, "score": m.score}) for m in self.masks)
+    def to_geojson(self, crs: int | CRS | None = 4326, smooth_factor: float = 0.0) -> FeatureCollection:
+        return get_geojson(
+            (m.to_polygon(crs, smooth_factor=smooth_factor), {"prompt": m.prompt, "score": m.score}) for m in self.masks
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,11 +48,11 @@ class SamMask:
     score: float
     mask: Grid
 
-    def to_polygon(self, crs: int | CRS | None = None):
+    def to_polygon(self, crs: int | CRS | None = None, smooth_factor: float = 0.0):
         m = self.mask.set_nan(0)
         if crs:
             m = m.project(crs)
-        return m.to_polygons()[0][0]
+        return m.to_polygons(smooth_factor=smooth_factor)[0][0]
 
 
 @dataclass(frozen=True)
@@ -71,7 +73,7 @@ class Stack:
             figure = plt.figure(figsize=figsize, frameon=False)
             axes = figure.add_axes((0, 0, 1, 1))
             axes.axis("off")
-            obj = self.to_uint8_range()
+            obj = self._to_uint8_range()
             rgb = [obj.grids[i - 1].data for i in (self.display if self.display else (1, 2, 3))]
             alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
             plt.imshow(np.dstack([*[np.asanyarray(np.nan_to_num(a, nan=0), "uint8") for a in rgb], alpha]))
@@ -243,11 +245,8 @@ class Stack:
     def percent_clip(self, min_percent: float, max_percent: float):
         return self.each(lambda g: g.percent_clip(min_percent, max_percent))
 
-    def to_uint8_range(self):
-        return self.each(lambda g: g.to_uint8_range())
-
-    def to_rgb_array(self):
-        return np.stack([g.stretch(0, 255).type("uint8", 0).data for g in self.grids[:3]], axis=-1)
+    def _to_uint8_range(self):
+        return self.each(lambda g: g._to_uint8_range())
 
     def color(self, rgb: tuple[int, int, int]):
         valid = set(range(1, len(self.grids) + 1))
@@ -270,7 +269,7 @@ class Stack:
         return get_folium_map(self, opacity, basemap, width, height, attribution, grayscale, **kwargs)
 
     def each(self, func: Callable[[Grid], Grid]):
-        return stack(*map(func, self.grids))
+        return stack(list(map(func, self.grids)))
 
     def georeference(self, xmin: float, ymin: float, xmax: float, ymax: float, crs: int | CRS = 4326):
         return self.each(lambda g: g.georeference(xmin, ymin, xmax, ymax, crs))
@@ -282,33 +281,16 @@ class Stack:
         return self.each(lambda g: g.clip_at(x, y, width, height))
 
     def extract_bands(self, *bands: int):
-        return stack(*(self.grids[i - 1] for i in bands))
+        return stack([self.grids[i - 1] for i in bands])
 
     def pca(self, n_components: int = 3):
-        return stack(*pca(n_components, *self.grids))
+        return stack(pca(n_components, *self.grids))
 
     def project(self, crs: int | CRS, resampling: Resampling = Resampling.nearest):
         return self.each(lambda g: g.project(crs, resampling))
 
     def resample(self, cell_size: tuple[float, float] | float, resampling: Resampling = Resampling.nearest):
         return self.each(lambda g: g.resample(cell_size, resampling))
-
-    def sam3_scan(self, *prompt: str, model=None, confidence_threshold: float = 0.5, size: int = 400):
-        g = self.grids[0]
-        w, h = g.cell_size.x * size, g.cell_size.y * size
-        d = {p: [] for p in prompt}
-        tiles = list(self.extent.tiles(w, h))
-        for i, tile in enumerate(tiles):
-            logger.info(f"Processing tile {i + 1} of {len(tiles)}...")
-            s = self.clip(*tile.buffer(w / 2, h / 2))
-            r = s.sam3(*prompt, model=model, confidence_threshold=confidence_threshold)
-            for m in r.masks:
-                d[m.prompt].append(m)
-        return get_geojson(
-            (polygon, {"prompt": p})
-            for p, masks in d.items()
-            for polygon in unary_union([m.to_polygon(4326) for m in masks]).geoms  # type: ignore
-        )
 
     def sam3(self, *prompt: str, model=None, confidence_threshold: float = 0.5):
         try:
@@ -321,7 +303,8 @@ class Stack:
             model = _build_sam3_model()
 
         processor = Sam3Processor(model, device=model.device, confidence_threshold=confidence_threshold)  # type: ignore
-        tensor = torch.from_numpy(np.transpose(self.to_rgb_array(), (2, 0, 1))).to(model.device)
+        rgb = np.stack([g.stretch(0, 255).type("uint8", 0).data for g in self.grids[:3]], axis=-1)
+        tensor = torch.from_numpy(np.transpose(rgb, (2, 0, 1))).to(model.device)
         state = processor.set_image(tensor)
 
         masks = []
@@ -336,6 +319,32 @@ class Stack:
 
         overview = self.each(lambda g: con(big_mask > 0, g, g / 4)).type("uint8", 0)
         return SamResult(masks=masks, overview=overview)
+
+    def sam3_geojson(
+        self,
+        *prompt: str,
+        model=None,
+        confidence_threshold: float = 0.5,
+        tile_size: int = 400,
+        smooth_factor: float = 0.0,
+    ):
+        g = self.grids[0]
+        w, h = g.cell_size.x * tile_size, g.cell_size.y * tile_size
+        d: dict[str, list[SamMask]] = {p: [] for p in prompt}
+        tiles = list(self.extent.tiles(w, h))
+
+        for i, tile in enumerate(tiles):
+            logger.info(f"Processing tile {i + 1} of {len(tiles)}...")
+            s = self.clip(*tile.buffer(w / 2, h / 2))
+            r = s.sam3(*prompt, model=model, confidence_threshold=confidence_threshold)
+            for m in r.masks:
+                d[m.prompt].append(m)
+
+        return get_geojson(
+            (polygon, {"prompt": p})
+            for p, masks in d.items()
+            for polygon in unary_union([m.to_polygon(4326, smooth_factor) for m in masks]).geoms  # type: ignore
+        )
 
     def zip_with(self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid]):
         grids = []
@@ -362,7 +371,7 @@ class Stack:
             or file.lower().endswith(".kmz")
             or file.lower().endswith(".png")
         ):
-            grids = self.extract_bands(*self.display).to_uint8_range().grids
+            grids = self.extract_bands(*self.display)._to_uint8_range().grids
             dtype = "uint8"
         else:
             grids = self.grids
@@ -374,90 +383,166 @@ class Stack:
         if nodata is not None:
             grids = tuple(con(g.is_nan(), float(nodata), g) for g in grids)
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
-            if isinstance(file, str):
-                create_directory(file)
-                with rasterio.open(
-                    file,
-                    "w",
-                    driver=driver or get_driver(file),
-                    count=len(grids),
-                    dtype=dtype,
-                    nodata=nodata,
-                    **_metadata(self.grids[0]),
-                ) as dataset:
-                    for index, grid in enumerate(grids):
-                        dataset.write(grid.data, index + 1)
-            elif isinstance(file, MemoryFile):
-                with file.open(
-                    driver=driver or "COG",
-                    count=len(grids),
-                    dtype=dtype,
-                    nodata=nodata,
-                    **_metadata(self.grids[0]),
-                ) as dataset:
-                    for index, grid in enumerate(grids):
-                        dataset.write(grid.data, index + 1)
+        if isinstance(file, str):
+            create_directory(file)
+            with rasterio.open(
+                file,
+                "w",
+                driver=driver or get_driver(file),
+                count=len(grids),
+                dtype=dtype,
+                nodata=nodata,
+                **_metadata(self.grids[0]),
+            ) as dataset:
+                for index, grid in enumerate(grids):
+                    dataset.write(grid.data, index + 1)
+        elif isinstance(file, MemoryFile):
+            with file.open(
+                driver=driver or "COG",
+                count=len(grids),
+                dtype=dtype,
+                nodata=nodata,
+                **_metadata(self.grids[0]),
+            ) as dataset:
+                for index, grid in enumerate(grids):
+                    dataset.write(grid.data, index + 1)
 
 
 @overload
-def stack(*data: Grid | str | DatasetReader | bytes | MemoryFile) -> Stack: ...
+def stack(data: str) -> Stack:
+    """Creates a new stack from file path or url.
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
 
 
 @overload
-def stack(*data: str, extent: tuple[float, float, float, float], max_tiles: int = 10) -> Stack: ...
+def stack(data: str, extent: tuple[float, float, float, float], max_tiles: int = 10) -> Stack:
+    """Creates a new stack from a tiled service url template with {x}{y}{z} or {q} placeholders.
+
+    Args:
+        data (str): Tiled service url template with {x}{y}{z} or {q} placeholders.
+        extent (tuple[float, float, float, float]): Map extent used to clip the raster.
+        max_tiles (int, optional): Maximum number of tiles to load.  Defaults to 10.
+
+    Example:
+        >>> stack(
+        ... "https://t.ssl.ak.tiles.virtualearth.net/tiles/a{q}.jpeg?g=15437",
+        ... extent=(-123.164, 49.272, -123.162, 49.273),
+        ... max_tiles=50
+        ... )
+        image: 1491x1143 uint8 | crs: 4326 | count: 3 | rgb: (1, 2, 3)
+
+    Returns:
+        Stack: A new stack.
+    """
+    ...
 
 
-def stack(
-    *data: Grid | str | DatasetReader | bytes | MemoryFile,
+@overload
+def stack(data: DatasetReader) -> Stack:  # type: ignore
+    """Creates a new stack from data reader.
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
+
+
+@overload
+def stack(data: bytes) -> Stack:
+    """Creates a new stack from bytes.
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
+
+
+@overload
+def stack(data: MemoryFile) -> Stack:  # type: ignore
+    """Creates a new stack from memory file.
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
+
+
+@overload
+def stack(data: Sequence[Grid]) -> Stack:
+    """Creates a new stack from grids.
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
+
+
+@overload
+def stack(data: Sequence[str]) -> Stack:
+    """Creates a new stack from file path(s) or url(s).
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
+
+
+def stack(  # type: ignore
+    data: str | DatasetReader | bytes | MemoryFile | Sequence[Grid] | Sequence[str],
     extent: tuple[float, float, float, float] | None = None,
     crs: int | CRS | None = None,
     max_tiles: int | None = None,
 ) -> Stack:
-    bands: list[Grid] = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
 
-    for g in data:
-        if isinstance(g, str):
-            if g.startswith("https://") and "{" in g and "}" in g and extent:
-                return from_tile_service(g, extent, max_tiles or 10)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
+        if isinstance(data, str) and data.startswith("https://") and "{" in data and "}" in data and extent:
+            return from_tile_service(data, extent, max_tiles or 10)
+
+        if isinstance(data, (str, DatasetReader, bytes, MemoryFile)):
+            data = [data]
+
+        bands: list[Grid] = []
+
+        for g in data:
+            if isinstance(g, str):
                 with rasterio.open(g) as dataset:
                     bands.extend(_read_grids(dataset, extent, crs))
-        elif isinstance(g, DatasetReader):
-            bands.extend(_read_grids(g, extent, crs))
-        elif isinstance(g, bytes):
-            with MemoryFile(g) as memory_file, memory_file.open() as dataset:
-                bands.extend(_read_grids(dataset, extent, crs))
-        elif isinstance(g, MemoryFile):
-            with g.open() as dataset:
-                bands.extend(_read_grids(dataset, extent, crs))
-        elif isinstance(g, Grid):
-            bands.append(g)
+            elif isinstance(g, DatasetReader):
+                bands.extend(_read_grids(g, extent, crs))
+            elif isinstance(g, bytes):
+                with MemoryFile(g) as memory_file, memory_file.open() as dataset:
+                    bands.extend(_read_grids(dataset, extent, crs))
+            elif isinstance(g, MemoryFile):
+                with g.open() as dataset:
+                    bands.extend(_read_grids(dataset, extent, crs))
+            elif isinstance(g, Grid):
+                bands.append(g)
 
-    def assert_unique(property: str):
-        values = {getattr(g, property) for g in bands}
-        if len(values) > 1:
-            raise ValueError(f"All grids must have the same {property}.")
+        def assert_unique(property: str):
+            values = {getattr(g, property) for g in bands}
+            if len(values) > 1:
+                raise ValueError(f"All grids must have the same {property}.")
 
-    assert_unique("width")
-    assert_unique("height")
-    assert_unique("dtype")
-    assert_unique("crs")
-    assert_unique("extent")
+        assert_unique("width")
+        assert_unique("height")
+        assert_unique("dtype")
+        assert_unique("crs")
+        assert_unique("extent")
 
-    return Stack(tuple(bands))
+        return Stack(tuple(bands))
 
 
 def _read_grids(dataset, extent: tuple[float, float, float, float] | None, crs: int | CRS | None) -> Iterator[Grid]:
     crs = get_crs(crs) if crs else None
     if dataset.subdatasets:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
-            for index, _ in enumerate(dataset.subdatasets):
-                with rasterio.open(dataset.subdatasets[index]) as subdataset:
-                    yield from _read_grids(subdataset, extent, crs)
+        for index, _ in enumerate(dataset.subdatasets):
+            with rasterio.open(dataset.subdatasets[index]) as subdataset:
+                yield from _read_grids(subdataset, extent, crs)
     elif dataset.indexes:
         for index in dataset.indexes:
             with contextlib.suppress(Exception):
@@ -484,7 +569,7 @@ def from_tile_service(url: str, extent: tuple[float, float, float, float], max_t
         b_mosaic = b.mosaic(b_mosaic) if b_mosaic else b
 
     if r_mosaic and g_mosaic and b_mosaic:
-        return stack(r_mosaic, g_mosaic, b_mosaic).clip(*extent).type("uint8", 0)
+        return stack([r_mosaic, g_mosaic, b_mosaic]).clip(*extent).type("uint8", 0)
 
     raise ValueError("No data found for the specified extent.")
 

@@ -332,10 +332,10 @@ def test_to_stack():
 
 
 def test_to_uint8_range():
-    g1 = (dem * 100).to_uint8_range()
+    g1 = (dem * 100)._to_uint8_range()
     assert pytest.approx(g1.min, 0.001) == 0
     assert pytest.approx(g1.max, 0.001) == 255
-    g2 = ((dem.randomize() - 0.5) * 10000).to_uint8_range()
+    g2 = ((dem.randomize() - 0.5) * 10000)._to_uint8_range()
     assert pytest.approx(g2.min, 0.001) == 0
     assert pytest.approx(g2.max, 0.001) == 255
 

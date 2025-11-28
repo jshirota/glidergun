@@ -7,13 +7,15 @@ import rasterio
 from glidergun._stack import Stack, stack
 
 landsat = stack(
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B1.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B2.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B3.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B4.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B5.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B6.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B7.TIF",
+    [
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B1.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B2.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B3.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B4.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B5.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B6.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B7.TIF",
+    ]
 )
 
 
@@ -60,7 +62,7 @@ def test_percent_clip():
 
 
 def test_to_uint8_range():
-    s = landsat.to_uint8_range()
+    s = landsat._to_uint8_range()
     for g in s.grids:
         assert pytest.approx(g.min, 0.001) == 0
         assert pytest.approx(g.max, 0.001) == 255

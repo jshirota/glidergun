@@ -10,13 +10,15 @@ dem = grid("./tests/input/n55_e008_1arc_v3.bil").resample(0.01)
 dem_color = grid("./tests/input/n55_e008_1arc_v3.bil").resample(0.01).color("terrain")
 
 landsat = stack(
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B1.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B2.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B3.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B4.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B5.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B6.TIF",
-    "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B7.TIF",
+    [
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B1.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B2.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B3.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B4.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B5.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B6.TIF",
+        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B7.TIF",
+    ]
 )
 
 
@@ -84,9 +86,7 @@ def test_saving_landsat_png():
     hash, compress = save(landsat.color((5, 4, 3)), "tests/output/temp/landsat_543_1.png")
     assert hash == "459c26b6902eac5ac9d2e01e2d5fe4bc"
 
-    hash, compress = save(
-        landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_2.png"
-    )
+    hash, compress = save(landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_2.png")
     assert hash == "459c26b6902eac5ac9d2e01e2d5fe4bc"
 
 
@@ -94,9 +94,7 @@ def test_saving_landsat_jpg():
     hash, compress = save(landsat.color((5, 4, 3)), "tests/output/temp/landsat_543_1.jpg")
     assert hash
 
-    hash, compress = save(
-        landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_2.jpg"
-    )
+    hash, compress = save(landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_2.jpg")
     assert hash
 
 
@@ -105,9 +103,7 @@ def test_saving_landsat_tif():
     hash2, compress2 = save(landsat.color((1, 2, 3)), "tests/output/temp/landsat_543_2.tif")
     assert hash1 == hash2
 
-    hash, compress = save(
-        landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_3.tif"
-    )
+    hash, compress = save(landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_3.tif")
     assert compress == "lzw"
 
 
@@ -116,15 +112,11 @@ def test_saving_landsat_img():
     hash2, compress2 = save(landsat.color((1, 2, 3)), "tests/output/temp/landsat_543_2.img")
     assert hash1 == hash2
 
-    hash, compress = save(
-        landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_3.img"
-    )
+    hash, compress = save(landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_3.img")
     assert hash == "700167ccacd6f63a3f46fcf7c2e41f71"
 
 
 def test_saving_landsat_bil():
-    hash, compress = save(
-        landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_2.bil"
-    )
+    hash, compress = save(landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_2.bil")
     assert hash == "ff0b8c95a824c9550d12c203132ca4a9"
     assert compress is None
