@@ -36,8 +36,10 @@ class SamResult:
     masks: list["SamMask"]
     overview: "Stack"
 
-    def to_geojson(self, crs: int | CRS | None = 4326) -> FeatureCollection:
-        return get_geojson((m.to_polygon(crs), {"prompt": m.prompt, "score": m.score}) for m in self.masks)
+    def to_geojson(self, crs: int | CRS | None = 4326, smooth_factor: float = 0.0) -> FeatureCollection:
+        return get_geojson(
+            (m.to_polygon(crs, smooth_factor=smooth_factor), {"prompt": m.prompt, "score": m.score}) for m in self.masks
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,11 +48,11 @@ class SamMask:
     score: float
     mask: Grid
 
-    def to_polygon(self, crs: int | CRS | None = None):
+    def to_polygon(self, crs: int | CRS | None = None, smooth_factor: float = 0.0):
         m = self.mask.set_nan(0)
         if crs:
             m = m.project(crs)
-        return m.to_polygons()[0][0]
+        return m.to_polygons(smooth_factor=smooth_factor)[0][0]
 
 
 @dataclass(frozen=True)
@@ -71,7 +73,7 @@ class Stack:
             figure = plt.figure(figsize=figsize, frameon=False)
             axes = figure.add_axes((0, 0, 1, 1))
             axes.axis("off")
-            obj = self.to_uint8_range()
+            obj = self._to_uint8_range()
             rgb = [obj.grids[i - 1].data for i in (self.display if self.display else (1, 2, 3))]
             alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
             plt.imshow(np.dstack([*[np.asanyarray(np.nan_to_num(a, nan=0), "uint8") for a in rgb], alpha]))
@@ -243,11 +245,8 @@ class Stack:
     def percent_clip(self, min_percent: float, max_percent: float):
         return self.each(lambda g: g.percent_clip(min_percent, max_percent))
 
-    def to_uint8_range(self):
-        return self.each(lambda g: g.to_uint8_range())
-
-    def to_rgb_array(self):
-        return np.stack([g.stretch(0, 255).type("uint8", 0).data for g in self.grids[:3]], axis=-1)
+    def _to_uint8_range(self):
+        return self.each(lambda g: g._to_uint8_range())
 
     def color(self, rgb: tuple[int, int, int]):
         valid = set(range(1, len(self.grids) + 1))
@@ -293,23 +292,6 @@ class Stack:
     def resample(self, cell_size: tuple[float, float] | float, resampling: Resampling = Resampling.nearest):
         return self.each(lambda g: g.resample(cell_size, resampling))
 
-    def sam3_scan(self, *prompt: str, model=None, confidence_threshold: float = 0.5, size: int = 400):
-        g = self.grids[0]
-        w, h = g.cell_size.x * size, g.cell_size.y * size
-        d = {p: [] for p in prompt}
-        tiles = list(self.extent.tiles(w, h))
-        for i, tile in enumerate(tiles):
-            logger.info(f"Processing tile {i + 1} of {len(tiles)}...")
-            s = self.clip(*tile.buffer(w / 2, h / 2))
-            r = s.sam3(*prompt, model=model, confidence_threshold=confidence_threshold)
-            for m in r.masks:
-                d[m.prompt].append(m)
-        return get_geojson(
-            (polygon, {"prompt": p})
-            for p, masks in d.items()
-            for polygon in unary_union([m.to_polygon(4326) for m in masks]).geoms  # type: ignore
-        )
-
     def sam3(self, *prompt: str, model=None, confidence_threshold: float = 0.5):
         try:
             import torch
@@ -321,7 +303,8 @@ class Stack:
             model = _build_sam3_model()
 
         processor = Sam3Processor(model, device=model.device, confidence_threshold=confidence_threshold)  # type: ignore
-        tensor = torch.from_numpy(np.transpose(self.to_rgb_array(), (2, 0, 1))).to(model.device)
+        rgb = np.stack([g.stretch(0, 255).type("uint8", 0).data for g in self.grids[:3]], axis=-1)
+        tensor = torch.from_numpy(np.transpose(rgb, (2, 0, 1))).to(model.device)
         state = processor.set_image(tensor)
 
         masks = []
@@ -336,6 +319,32 @@ class Stack:
 
         overview = self.each(lambda g: con(big_mask > 0, g, g / 4)).type("uint8", 0)
         return SamResult(masks=masks, overview=overview)
+
+    def sam3_geojson(
+        self,
+        *prompt: str,
+        model=None,
+        confidence_threshold: float = 0.5,
+        tile_size: int = 400,
+        smooth_factor: float = 0.0,
+    ):
+        g = self.grids[0]
+        w, h = g.cell_size.x * tile_size, g.cell_size.y * tile_size
+        d: dict[str, list[SamMask]] = {p: [] for p in prompt}
+        tiles = list(self.extent.tiles(w, h))
+
+        for i, tile in enumerate(tiles):
+            logger.info(f"Processing tile {i + 1} of {len(tiles)}...")
+            s = self.clip(*tile.buffer(w / 2, h / 2))
+            r = s.sam3(*prompt, model=model, confidence_threshold=confidence_threshold)
+            for m in r.masks:
+                d[m.prompt].append(m)
+
+        return get_geojson(
+            (polygon, {"prompt": p})
+            for p, masks in d.items()
+            for polygon in unary_union([m.to_polygon(4326, smooth_factor) for m in masks]).geoms  # type: ignore
+        )
 
     def zip_with(self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid]):
         grids = []
@@ -362,7 +371,7 @@ class Stack:
             or file.lower().endswith(".kmz")
             or file.lower().endswith(".png")
         ):
-            grids = self.extract_bands(*self.display).to_uint8_range().grids
+            grids = self.extract_bands(*self.display)._to_uint8_range().grids
             dtype = "uint8"
         else:
             grids = self.grids
@@ -402,11 +411,76 @@ class Stack:
 
 
 @overload
-def stack(*data: Grid | str | DatasetReader | bytes | MemoryFile) -> Stack: ...
+def stack(*data: Grid) -> Stack:
+    """Creates a new stack from grids.
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
 
 
 @overload
-def stack(*data: str, extent: tuple[float, float, float, float], max_tiles: int = 10) -> Stack: ...
+def stack(*data: str) -> Stack:
+    """Creates a new stack from file path(s) or url(s).
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
+
+
+@overload
+def stack(*data: DatasetReader) -> Stack:  # type: ignore
+    """Creates a new stack from data reader.
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
+
+
+@overload
+def stack(*data: bytes) -> Stack:
+    """Creates a new stack from bytes.
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
+
+
+@overload
+def stack(*data: MemoryFile) -> Stack:  # type: ignore
+    """Creates a new stack from memory file.
+
+    Returns:
+        Stack: Grids.
+    """
+    ...
+
+
+@overload
+def stack(*data: str, extent: tuple[float, float, float, float], max_tiles: int = 10) -> Stack:
+    """Creates a new stack from a tiled service url template with {x}{y}{z} or {q} placeholders.
+
+    Args:
+        data (str): Tiled service url template with {x}{y}{z} or {q} placeholders.
+        extent (tuple[float, float, float, float]): Map extent used to clip the raster.
+        max_tiles (int, optional): Maximum number of tiles to load.  Defaults to 10.
+
+    Example:
+        >>> stack(
+        ... "https://t.ssl.ak.tiles.virtualearth.net/tiles/a{q}.jpeg?g=15437&n=z&prx=1",
+        ... extent=(-123.164, 49.272, -123.162, 49.273),
+        ... max_tiles=50
+        ... )
+        image: 1491x1143 uint8 | crs: 4326 | count: 3 | rgb: (1, 2, 3)
+
+    Returns:
+        Stack: A new stack.
+    """
+    ...
 
 
 def stack(

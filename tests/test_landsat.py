@@ -60,7 +60,7 @@ def test_percent_clip():
 
 
 def test_to_uint8_range():
-    s = landsat.to_uint8_range()
+    s = landsat._to_uint8_range()
     for g in s.grids:
         assert pytest.approx(g.min, 0.001) == 0
         assert pytest.approx(g.max, 0.001) == 255

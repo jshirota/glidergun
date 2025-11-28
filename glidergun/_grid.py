@@ -69,7 +69,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
             figure = plt.figure(figsize=figsize, frameon=False)
             axes = figure.add_axes((0, 0, 1, 1))
             axes.axis("off")
-            obj = self.to_uint8_range()
+            obj = self._to_uint8_range()
             plt.imshow(obj.data, cmap=self.display)
             plt.savefig(buffer, bbox_inches="tight", pad_inches=0)
             plt.close(figure)
@@ -612,17 +612,21 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
     def to_points(self, include_nan: bool = False) -> list[PointValue]:
         return [PointValue(float(x), float(y), float(v)) for x, y, v in self._coords_with_values(include_nan)]
 
-    def to_polygons(self, include_nan: bool = False) -> list[tuple[Polygon, float]]:
+    def to_polygons(self, include_nan: bool = False, smooth_factor: float = 0.0) -> list[tuple[Polygon, float]]:
         g = self * 1
         mask = None if include_nan else np.isfinite(g.data)
-        return [
-            (Polygon(shape["coordinates"][0], shape["coordinates"][1:]), float(value))
-            for shape, value in features.shapes(g.data, mask=mask, transform=g.transform)
-        ]
+        buffer = min(g.cell_size) * smooth_factor
+        results = []
+        for shape, value in features.shapes(g.data, mask=mask, transform=g.transform):
+            polygon = Polygon(shape["coordinates"][0], shape["coordinates"][1:])
+            if buffer > 0:
+                polygon = polygon.buffer(-buffer).buffer(buffer)
+            results.append((polygon, float(value)))
+        return results
 
-    def to_geojson(self, polygonize: bool = False, include_nan: bool = False):
+    def to_geojson(self, polygonize: bool = False, include_nan: bool = False, smooth_factor: float = 0.0):
         if polygonize:
-            features = self.to_polygons(include_nan=include_nan)
+            features = self.to_polygons(include_nan=include_nan, smooth_factor=smooth_factor)
         else:
             features = [(Point(x, y), value) for x, y, value in self.to_points(include_nan=include_nan)]
         return get_geojson((shape, {"value": None if np.isnan(value) else value}) for shape, value in features)
@@ -672,7 +676,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 
         return self.cap_range(min_value, max_value)
 
-    def to_uint8_range(self):
+    def _to_uint8_range(self):
         if self.dtype == "bool" or self.min >= 0 and self.max <= 255:
             return self
         return self.percent_clip(0.1, 99.9).stretch(0, 255)
