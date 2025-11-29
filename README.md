@@ -27,3 +27,9 @@ animate(simulate(seed), interval=40)
 ```
 
 <img src="game_of_life.gif" width="600"/>
+
+<a href="glidergun.ipynb" style="font-size:16px;">More Examples</a>
+
+### License
+
+This project is licensed under the MIT License.  See `LICENSE` for details.

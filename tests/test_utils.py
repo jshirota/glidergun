@@ -1,6 +1,6 @@
 import numpy as np
 
-from glidergun._grid import grid
+from glidergun import grid
 from glidergun._utils import format_type, get_nodata_value
 
 
@@ -59,7 +59,7 @@ def test_get_nodata_value_float64():
 
 
 def test_get_nodata_value_uint8():
-    assert get_nodata_value("uint8") == np.iinfo("uint8").max
+    assert get_nodata_value("uint8") is None
 
 
 def test_get_nodata_value_uint16():

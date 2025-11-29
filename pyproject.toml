@@ -1,14 +1,17 @@
 [project]
 name = "glidergun"
-version = "0.8.111"
+version = "0.9.7"
 description = "Map Algebra with NumPy"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "folium>=0.18.0",
     "ipython>=8.0.0",
     "matplotlib>=3.5.1",
     "numpy>=1.22.0",
+    "planetary-computer>=1.0.0",
     "rasterio>=1.2.10",
     "scikit-learn>=1.0.2",
     "scipy>=1.7.3",
@@ -20,7 +23,6 @@ dev = [
     "huggingface-hub>=0.36.0",
     "ipykernel>=7.1.0",
     "ipywidgets>=8.1.8",
-    "openai-clip>=1.0.1",
     "pytest>=8.3.3",
     "ruff>=0.8.1",
     "sam3>=0.1.2",

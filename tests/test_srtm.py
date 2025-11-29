@@ -5,18 +5,10 @@ import numpy as np
 import pytest
 import rasterio
 
-from glidergun._grid import Grid, con, grid
-from glidergun._mosaic import mosaic
+from glidergun import Grid, con, grid, mosaic
+from glidergun._grid import _to_uint8_range
 
 dem = grid("./tests/input/n55_e008_1arc_v3.bil")
-
-
-def test_distance_2():
-    g = dem.distance([(8.2, 55.3)])
-    assert round(g.value_at(8.2, 55.3), 3) == 0.0
-    assert round(g.value_at(8.5, 55.3), 3) == 0.3
-    assert round(g.value_at(8.2, 55.7), 3) == 0.4
-    assert round(g.value_at(8.5, 55.7), 3) == 0.5
 
 
 def test_aspect():
@@ -88,17 +80,28 @@ def test_buffer_3():
     assert pytest.approx(g5.max, 0.001) == 2
 
 
+def test_buffer_4():
+    g = dem.resample(0.01).randomize() > 0.9
+    assert len(g.bins) == 2
+    assert g.type("uint8").buffer(1, 3).dtype == "uint8"
+    assert g.type("uint8").buffer(1, 0).dtype == "uint8"
+    assert g.type("int32").buffer(1, 3).dtype == "int32"
+    assert g.type("int32").buffer(1, 0).dtype == "int32"
+    assert g.type("float32").buffer(1, 3).dtype == "float32"
+    assert g.type("float32").buffer(1, 0).dtype == "float32"
+
+
 def test_clip():
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin + 0.02, ymin + 0.03, xmax - 0.04, ymax - 0.05
-    for a, b in zip(dem.clip(*extent).extent, extent, strict=False):
+    for a, b in zip(dem.clip(extent).extent, extent, strict=False):
         assert pytest.approx(a, 0.001) == b
 
 
 def test_clip_2():
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin - 0.02, ymin - 0.03, xmax + 0.04, ymax + 0.05
-    for a, b in zip(dem.clip(*extent).extent, extent, strict=False):
+    for a, b in zip(dem.clip(extent).extent, extent, strict=False):
         assert pytest.approx(a, 0.001) == b
 
 
@@ -332,10 +335,10 @@ def test_to_stack():
 
 
 def test_to_uint8_range():
-    g1 = (dem * 100)._to_uint8_range()
+    g1 = _to_uint8_range(dem * 100)
     assert pytest.approx(g1.min, 0.001) == 0
     assert pytest.approx(g1.max, 0.001) == 255
-    g2 = ((dem.randomize() - 0.5) * 10000)._to_uint8_range()
+    g2 = _to_uint8_range((dem.randomize() - 0.5) * 10000)
     assert pytest.approx(g2.min, 0.001) == 0
     assert pytest.approx(g2.max, 0.001) == 255
 
@@ -343,6 +346,15 @@ def test_to_uint8_range():
 def test_project():
     g = dem.project(3857)
     assert g.crs.wkt.startswith('PROJCS["WGS 84 / Pseudo-Mercator",')
+
+
+def test_project_2():
+    g0 = dem.type("int32")
+    g1 = g0.project(3857)
+    g2 = g0.project(4326)
+    assert g0.dtype == "int32"
+    assert g1.dtype == "float32"
+    assert g2.dtype == "float32"
 
 
 def test_properties():
@@ -389,6 +401,15 @@ def test_resample_2():
 def test_resample_3():
     g = dem.resample((0.07, 0.04))
     assert g.cell_size == (0.07, 0.04)
+
+
+def test_resample_4():
+    g0 = dem.type("int32")
+    g1 = g0.resample_by(10.0)
+    g2 = g0.resample_by(1.0)
+    assert g0.dtype == "int32"
+    assert g1.dtype == "float32"
+    assert g2.dtype == "float32"
 
 
 def test_set_nan():
@@ -496,26 +517,29 @@ def test_mosaic_dataset():
         "./tests/input/n55_e009_1arc_v3.bil",
     )
 
-    def clip(xmin, ymin, xmax, ymax):
-        g = m.clip(xmin, ymin, xmax, ymax)
-        assert g
-        return g
+    e = m.extent
+    assert e == pytest.approx((8.0, 55.0, 10.0, 56.0), 0.001)
+
+    def clip(xmin, ymin, xmax, ymax) -> Grid:
+        g = m.clip((xmin, ymin, xmax, ymax))
+        return g  # type: ignore
 
     assert clip(8, 55, 9, 56).extent == pytest.approx((8, 55, 9, 56), 0.001)
     assert clip(8, 55, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
-    assert clip(8.2, 55.2, 9.2, 56.2).extent == pytest.approx((8.2, 55.2, 9.2, 56.2), 0.001)
-    assert clip(7.5, 55, 10, 56).extent == pytest.approx((7.5, 55, 10, 56), 0.001)
-    assert clip(8, 50, 10, 56).extent == pytest.approx((8, 50, 10, 56), 0.001)
-    assert clip(8, 55, 15, 56).extent == pytest.approx((8, 55, 15, 56), 0.001)
-    assert clip(8, 55, 10, 60).extent == pytest.approx((8, 55, 10, 60), 0.001)
+    assert clip(8.2, 55.2, 9.2, 56.2).extent == pytest.approx((8.2, 55.2, 9.2, 56.0), 0.001)
+    assert clip(7.5, 55, 10, 56).extent == pytest.approx((8.0, 55, 10, 56), 0.001)
+    assert clip(8, 50, 10, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
+    assert clip(8, 55, 15, 56).extent == pytest.approx((8, 55, 10, 56), 0.001)
+    assert clip(8, 55, 10, 60).extent == pytest.approx((8, 55, 10, 56), 0.001)
+    assert clip(2.5, 55.5, 3.5, 55.5) is None
 
 
 def test_mosaic_eager_vs_lazy():
     g = mosaic(grid("./tests/input/n55_e008_1arc_v3.bil"), grid("./tests/input/n55_e009_1arc_v3.bil"))
     m = mosaic("./tests/input/n55_e008_1arc_v3.bil", "./tests/input/n55_e009_1arc_v3.bil")
 
-    g1 = g.clip(8, 55, 8.5, 56)
-    g2 = m.clip(8, 55, 8.5, 56)
+    g1 = g.clip((8, 55, 8.5, 56))
+    g2 = m.clip((8, 55, 8.5, 56))
     assert g2
     assert g1.md5 == g2.md5
 
@@ -648,7 +672,7 @@ def test_tiling_2():
     folder = "tests/output/temp2"
     for e in g1.extent.tiles(0.1, 0.1):
         name = f"{folder}/{e}.tif"
-        g1.clip(*e).save(name)
+        g1.clip(e).save(name)
         g2 = g2.mosaic(grid(name)) if g2 else grid(name)
 
     assert g2
@@ -663,8 +687,8 @@ def test_mosaic_tiling():
     m = mosaic(*files)
     g = mosaic(*map(grid, files))
     e = (8.678, 55.2, 8.8, 55.4)
-    g1 = m.clip(*e)
-    g2 = g.clip(*e)
+    g1 = m.clip(e)
+    g2 = g.clip(e)
     g3 = None
     for tile in m.tiles(0.1, 0.1, e):
         g3 = tile if g3 is None else g3.mosaic(tile)

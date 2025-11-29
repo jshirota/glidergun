@@ -29,15 +29,26 @@ class Interpolation:
         maxiter: int = 400,
         rescale: bool = False,
     ):
-        def f(coords, values):
-            return CloughTocher2DInterpolator(
-                coords, values, fill_value, tol, maxiter, rescale
-            )
+        """Interpolate with Clough-Tocher 2D method over input points.
 
-        g = cast("Grid", self)
+        Args:
+            points: Sequence of `(x, y, value)` points; defaults to grid points.
+            cell_size: Target cell size (tuple or scalar); defaults to current.
+            fill_value: Value for outside convex hull / invalid.
+            tol: Tolerance for Delaunay triangulation.
+            maxiter: Maximum iterations.
+            rescale: Whether to rescale inputs for numerical stability.
+
+        Returns:
+            Grid: Interpolated grid.
+        """
+        def f(coords, values):
+            return CloughTocher2DInterpolator(coords, values, fill_value, tol, maxiter, rescale)
+
+        self = cast("Grid", self)
         if points is None:
-            points = g.to_points()
-        return interpolate(f, points, g.extent, g.crs, cell_size or g.cell_size)
+            points = self.to_points()
+        return interpolate(f, points, self.extent, self.crs, cell_size or self.cell_size)
 
     def interp_linear(
         self,
@@ -46,13 +57,24 @@ class Interpolation:
         fill_value: float = np.nan,
         rescale: bool = False,
     ):
+        """Linear interpolation using scattered points.
+
+        Args:
+            points: Sequence of `(x, y, value)` points; defaults to grid points.
+            cell_size: Target cell size (tuple or scalar); defaults to current.
+            fill_value: Value for outside convex hull / invalid.
+            rescale: Whether to rescale inputs for numerical stability.
+
+        Returns:
+            Grid: Interpolated grid.
+        """
         def f(coords, values):
             return LinearNDInterpolator(coords, values, fill_value, rescale)
 
-        g = cast("Grid", self)
+        self = cast("Grid", self)
         if points is None:
-            points = g.to_points()
-        return interpolate(f, points, g.extent, g.crs, cell_size or g.cell_size)
+            points = self.to_points()
+        return interpolate(f, points, self.extent, self.crs, cell_size or self.cell_size)
 
     def interp_nearest(
         self,
@@ -61,13 +83,24 @@ class Interpolation:
         rescale: bool = False,
         tree_options: Any = None,
     ):
+        """Nearest-neighbor interpolation of scattered points.
+
+        Args:
+            points: Sequence of `(x, y, value)` points; defaults to grid points.
+            cell_size: Target cell size (tuple or scalar); defaults to current.
+            rescale: Whether to rescale inputs for numerical stability.
+            tree_options: Options passed to KD-tree construction.
+
+        Returns:
+            Grid: Interpolated grid.
+        """
         def f(coords, values):
             return NearestNDInterpolator(coords, values, rescale, tree_options)
 
-        g = cast("Grid", self)
+        self = cast("Grid", self)
         if points is None:
-            points = g.to_points()
-        return interpolate(f, points, g.extent, g.crs, cell_size or g.cell_size)
+            points = self.to_points()
+        return interpolate(f, points, self.extent, self.crs, cell_size or self.cell_size)
 
     def interp_rbf(
         self,
@@ -79,24 +112,51 @@ class Interpolation:
         epsilon: float = 1,
         degree: int | None = None,
     ):
-        def f(coords, values):
-            return RBFInterpolator(
-                coords, values, neighbors, smoothing, kernel, epsilon, degree
-            )
+        """Radial basis function interpolation of scattered points.
 
-        g = cast("Grid", self)
+        Args:
+            points: Sequence of `(x, y, value)` points; defaults to grid points.
+            cell_size: Target cell size (tuple or scalar); defaults to current.
+            neighbors: Number of nearest neighbors to use; None uses all.
+            smoothing: Regularization (0 means exact interpolation).
+            kernel: RBF kernel name (e.g., 'thin_plate_spline').
+            epsilon: Kernel parameter (scale).
+            degree: Polynomial degree for certain kernels.
+
+        Returns:
+            Grid: Interpolated grid.
+        """
+        def f(coords, values):
+            return RBFInterpolator(coords, values, neighbors, smoothing, kernel, epsilon, degree)
+
+        self = cast("Grid", self)
         if points is None:
-            points = g.to_points()
-        return interpolate(f, points, g.extent, g.crs, cell_size or g.cell_size)
+            points = self.to_points()
+        return interpolate(f, points, self.extent, self.crs, cell_size or self.cell_size)
 
 
 def interpolate(
     interpolator_factory: Callable[[ndarray, ndarray], Any],
     points: Sequence[tuple[float, float, float]],
     extent: tuple[float, float, float, float],
-    crs: int | CRS,
+    crs: int | str | CRS,
     cell_size: tuple[float, float] | float,
 ):
+    """Common interpolation routine.
+
+    Builds an interpolator from scattered `points` and evaluates it on grid
+    coordinates derived from `extent` and `cell_size`.
+
+    Args:
+        interpolator_factory: Callable producing an interpolator given coords and values.
+        points: Sequence of `(x, y, value)`.
+        extent: Target grid extent.
+        crs: Target CRS.
+        cell_size: Target cell size.
+
+    Returns:
+        Grid: Interpolated grid.
+    """
     from glidergun._grid import grid
 
     g = grid(np.nan, extent, crs, cell_size)

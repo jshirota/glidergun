@@ -52,7 +52,7 @@ class Mosaic:
     def _read(self, extent: tuple[float, float, float, float], index: int):
         for f, e in self.files.items():
             try:
-                if e.intersects(*extent):
+                if e.intersects(extent):
                     yield grid(f, extent, index=index)
             except Exception as ex:
                 logger.warning(f"Failed to read {f} for extent {extent}: {ex}")
@@ -63,25 +63,35 @@ class Mosaic:
         height: float,
         clip_extent: tuple[float, float, float, float] | None = None,
     ):
+        """Iterate over clipped mosaicked tiles of the requested size.
+
+        Args:
+            width: Tile width in coordinate units.
+            height: Tile height in coordinate units.
+            clip_extent: Optional extent to clip tiles to; defaults to full.
+
+        Yields:
+            Grid: Each tile as a `Grid`.
+        """
         extent = Extent(*clip_extent) if clip_extent else self.extent
         for e in extent.tiles(width, height):
-            g = self.clip(*e)
+            g = self.clip(e)
             assert g
             yield g
 
     @overload
-    def clip(self, xmin: float, ymin: float, xmax: float, ymax: float, index: int = 1) -> Grid | None: ...
+    def clip(self, extent: tuple[float, float, float, float], index: int = 1) -> Grid | None: ...
 
     @overload
-    def clip(self, xmin: float, ymin: float, xmax: float, ymax: float, index: tuple[int, ...]) -> Stack | None: ...
+    def clip(self, extent: tuple[float, float, float, float], index: tuple[int, ...]) -> Stack | None: ...
 
-    def clip(self, xmin: float, ymin: float, xmax: float, ymax: float, index=None):
+    def clip(self, extent: tuple[float, float, float, float], index=None):
         if not index or isinstance(index, int):
-            grids: list[Grid] = [g for g in self._read((xmin, ymin, xmax, ymax), index or 1) if g]
+            grids: list[Grid] = [g for g in self._read(extent, index or 1) if g]
             if grids:
                 return mosaic(*grids)
             return None
-        return stack(*(self.clip(xmin, ymin, xmax, ymax, index=i) for i in index))
+        return stack(*(self.clip(extent, index=i) for i in index))
 
 
 @overload

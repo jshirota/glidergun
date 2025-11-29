@@ -2,8 +2,7 @@ import numpy as np
 import pytest
 from rasterio.transform import from_origin
 
-from glidergun._grid import grid
-from glidergun._types import CellSize, Extent
+from glidergun import CellSize, Extent, grid
 
 
 @pytest.fixture

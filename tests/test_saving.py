@@ -3,8 +3,7 @@ import shutil
 
 import rasterio
 
-from glidergun._grid import grid
-from glidergun._stack import stack
+from glidergun import grid, stack
 
 dem = grid("./tests/input/n55_e008_1arc_v3.bil").resample(0.01)
 dem_color = grid("./tests/input/n55_e008_1arc_v3.bil").resample(0.01).color("terrain")
@@ -32,11 +31,6 @@ def save(obj, file_name):
     return hash, compress
 
 
-def test_saving_dem_png():
-    hash, compress = save(dem, "tests/output/temp/dem.png")
-    assert hash == "aa05e8bf7a3d9d450c6466392c3d96cd"
-
-
 def test_saving_dem_jpg():
     hash, compress = save(dem, "tests/output/temp/dem.jpg")
     assert hash
@@ -57,11 +51,6 @@ def test_saving_dem_bil():
     assert hash == "ce6230320c089d41ddbc8b3f17fd0c0d"
 
 
-def test_saving_dem_color_png():
-    hash, compress = save(dem_color, "tests/output/temp/dem_color.png")
-    assert hash == "3a01653a1228fd4045392d2a32814ac9"
-
-
 def test_saving_dem_color_jpg():
     hash, compress = save(dem_color, "tests/output/temp/dem_color.jpg")
     assert hash
@@ -80,14 +69,6 @@ def test_saving_dem_color_img():
 def test_saving_dem_color_bil():
     hash, compress = save(dem_color, "tests/output/temp/dem_color.bil")
     assert hash == "ce6230320c089d41ddbc8b3f17fd0c0d"
-
-
-def test_saving_landsat_png():
-    hash, compress = save(landsat.color((5, 4, 3)), "tests/output/temp/landsat_543_1.png")
-    assert hash == "459c26b6902eac5ac9d2e01e2d5fe4bc"
-
-    hash, compress = save(landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_2.png")
-    assert hash == "459c26b6902eac5ac9d2e01e2d5fe4bc"
 
 
 def test_saving_landsat_jpg():

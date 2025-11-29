@@ -2,9 +2,7 @@ import numpy as np
 import pytest
 from rasterio.crs import CRS
 
-from glidergun._grid import grid
-from glidergun._stack import stack
-from glidergun._types import Extent
+from glidergun import Extent, grid, stack
 
 
 def test_create_stack_1():
@@ -61,7 +59,10 @@ def test_stack_creation(sample_grids):
 def test_stack_repr(sample_grids):
     grid1, grid2 = sample_grids
     s = stack([grid1, grid2])
-    assert repr(s) == f"image: 10x10 float32 | crs: {grid1.crs} | count: 2 | rgb: (1, 2, 3)"
+    assert (
+        repr(s)
+        == f"image: 10x10 float32 | crs: {grid1.crs} | count: 2 | rgb: (1, 2, 3) | cell: (1.0, 1.0) | extent: (0.0, 0.0, 10.0, 10.0)"  # noqa: E501
+    )
 
 
 def test_stack_addition(sample_grids):
@@ -106,7 +107,7 @@ def test_stack_resample(sample_grids):
 def test_stack_clip(sample_grids):
     grid1, grid2 = sample_grids
     s = stack([grid1, grid2])
-    result = s.clip(2, 2, 8, 8)
+    result = s.clip((2, 2, 8, 8))
     assert result.grids[0].extent == Extent(2, 2, 8, 8)
     assert result.grids[1].extent == Extent(2, 2, 8, 8)
 

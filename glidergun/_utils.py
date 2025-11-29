@@ -16,7 +16,12 @@ def create_directory(file_path: str):
     Path(directory).mkdir(parents=True, exist_ok=True)
 
 
-def get_crs(crs: int | CRS):
+def get_crs(crs: int | str | CRS):
+    if isinstance(crs, str):
+        try:
+            return CRS.from_string(crs)
+        except Exception:
+            return CRS.from_wkt(crs)
     return CRS.from_epsg(crs) if isinstance(crs, int) else crs
 
 
@@ -35,7 +40,7 @@ def format_type(data: ndarray):
 
 
 def get_nodata_value(dtype: str) -> float | int | None:
-    if dtype == "bool":
+    if dtype == "bool" or dtype == "uint8":
         return None
     if dtype.startswith("float"):
         return float(np.finfo(dtype).min)

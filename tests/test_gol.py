@@ -1,4 +1,4 @@
-from glidergun._grid import Grid, grid
+from glidergun import Grid, grid
 
 
 def tick(grid: Grid):

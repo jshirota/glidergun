@@ -1,6 +1,6 @@
 import numpy as np
 
-from glidergun._grid import grid
+from glidergun import grid
 
 
 def test_grid_reclass():
