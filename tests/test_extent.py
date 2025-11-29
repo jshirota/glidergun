@@ -1,5 +1,4 @@
-from glidergun._grid import grid
-from glidergun._types import Extent
+from glidergun import Extent, grid
 
 
 def test_extent_1():

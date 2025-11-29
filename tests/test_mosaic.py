@@ -1,5 +1,4 @@
-from glidergun._grid import Grid, grid
-from glidergun._mosaic import mosaic
+from glidergun import Grid, grid, mosaic
 
 
 def test_mosaic_function_with_grids():

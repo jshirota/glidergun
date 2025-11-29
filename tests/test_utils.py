@@ -1,6 +1,6 @@
 import numpy as np
 
-from glidergun._grid import grid
+from glidergun import grid
 from glidergun._utils import format_type, get_nodata_value
 
 

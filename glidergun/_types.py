@@ -1,7 +1,11 @@
+import io
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, NamedTuple, Protocol, TypedDict
 
+from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from numpy import ndarray
 from pyparsing import Any
 from rasterio.crs import CRS
@@ -20,6 +24,14 @@ class Extent(NamedTuple):
     ymin: float
     xmax: float
     ymax: float
+
+    @property
+    def width(self):
+        return self.xmax - self.xmin
+
+    @property
+    def height(self):
+        return self.ymax - self.ymin
 
     @property
     def is_valid(self):
@@ -51,8 +63,8 @@ class Extent(NamedTuple):
                 ymin = ymax
             xmin = xmax
 
-    def buffer(self, width: float, height: float):
-        return Extent(self.xmin - width, self.ymin - height, self.xmax + width, self.ymax + height)
+    def buffer(self, xmin_pad: float, ymin_pad: float, xmax_pad: float, ymax_pad: float):
+        return Extent(self.xmin - xmin_pad, self.ymin - ymin_pad, self.xmax + xmax_pad, self.ymax + ymax_pad)
 
     def __repr__(self):
         return show(self)
@@ -108,6 +120,19 @@ class Scaler(Protocol):
     fit: Callable
     transform: Callable
     fit_transform: Callable
+
+
+@dataclass(frozen=True)
+class Chart:
+    figure: Figure
+    axes: Axes
+
+    def _repr_png_(self):
+        with io.BytesIO() as buffer:
+            self.figure.savefig(buffer, format="png", bbox_inches="tight")
+            plt.close(self.figure)
+            buffer.seek(0)
+            return buffer.read()
 
 
 def show(obj: tuple[float, ...]) -> str:

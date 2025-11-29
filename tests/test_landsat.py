@@ -4,7 +4,8 @@ import shutil
 import pytest
 import rasterio
 
-from glidergun._stack import Stack, stack
+from glidergun import Stack, stack
+from glidergun._grid import _to_uint8_range
 
 landsat = stack(
     [
@@ -62,7 +63,7 @@ def test_percent_clip():
 
 
 def test_to_uint8_range():
-    s = landsat._to_uint8_range()
+    s = landsat.each(_to_uint8_range)
     for g in s.grids:
         assert pytest.approx(g.min, 0.001) == 0
         assert pytest.approx(g.max, 0.001) == 255
@@ -104,6 +105,18 @@ def test_resample_2():
     for g in s.grids:
         assert pytest.approx(g.cell_size.x, 0.001) == 1000
         assert pytest.approx(g.cell_size.y, 0.001) == 600
+
+
+def test_resample_by():
+    s0 = landsat.type("int32")
+    s1 = s0.resample_by(2.0)
+    s2 = s0.resample_by(1.0)
+    assert s0.dtype == "int32"
+    assert s1.dtype == "float32"
+    assert s2.dtype == "float32"
+    assert pytest.approx(s1.cell_size.x, 0.001) == s0.cell_size.x * 2.0
+    assert pytest.approx(s1.cell_size.y, 0.001) == s0.cell_size.y * 2.0
+    assert s0.cell_size == s2.cell_size
 
 
 def save(s1: Stack, file: str, strict: bool = True):

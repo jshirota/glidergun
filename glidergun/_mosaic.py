@@ -63,6 +63,16 @@ class Mosaic:
         height: float,
         clip_extent: tuple[float, float, float, float] | None = None,
     ):
+        """Iterate over clipped mosaicked tiles of the requested size.
+
+        Args:
+            width: Tile width in coordinate units.
+            height: Tile height in coordinate units.
+            clip_extent: Optional extent to clip tiles to; defaults to full.
+
+        Yields:
+            Grid: Each tile as a `Grid`.
+        """
         extent = Extent(*clip_extent) if clip_extent else self.extent
         for e in extent.tiles(width, height):
             g = self.clip(*e)

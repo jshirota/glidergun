@@ -3,8 +3,7 @@ import shutil
 
 import rasterio
 
-from glidergun._grid import grid
-from glidergun._stack import stack
+from glidergun import grid, stack
 
 dem = grid("./tests/input/n55_e008_1arc_v3.bil").resample(0.01)
 dem_color = grid("./tests/input/n55_e008_1arc_v3.bil").resample(0.01).color("terrain")

@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from glidergun._grid import Grid, grid
+from glidergun import Grid, grid
 
 
 class TestFocal:

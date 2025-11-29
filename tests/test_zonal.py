@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from glidergun._grid import grid
+from glidergun import grid
 
 
 @pytest.fixture

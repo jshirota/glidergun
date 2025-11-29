@@ -83,9 +83,9 @@ def get_folium_map(
 def get_html(obj: Grid | Stack | ArtistAnimation):
     if isinstance(obj, ArtistAnimation):
         return f"<div>{obj.to_jshtml()}</div>"
-    n = 50
+    n = 100
     description = "<br />".join(s if len(s) <= n else s[:n] + "..." for s in str(obj).split("|"))
-    return f'<div><div>{description}</div><img src="{obj.img}" /><div>{obj.extent}</div></div>'
+    return f'<div><div>{description}</div><img src="{obj.img}" /></div>'
 
 
 def animate(
