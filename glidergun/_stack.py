@@ -24,7 +24,7 @@ from glidergun._literals import BaseMap, DataType, ResamplingMethod
 from glidergun._quadkey import get_tiles
 from glidergun._sam import Sam
 from glidergun._types import CellSize, Chart, Scaler
-from glidergun._utils import create_directory, get_crs, get_driver, get_nodata_value
+from glidergun._utils import create_directory_for, get_crs, get_driver, get_nodata_value
 
 logger = logging.getLogger(__name__)
 
@@ -363,7 +363,7 @@ class Stack(Sam):
             grids = tuple(con(g.is_nan(), float(nodata), g) for g in grids)
 
         if isinstance(file, str):
-            create_directory(file)
+            create_directory_for(file)
             with rasterio.open(
                 file,
                 "w",
