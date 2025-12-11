@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import IO, TYPE_CHECKING, cast
@@ -114,25 +115,14 @@ class Sam:
 
 @lru_cache(maxsize=1)
 def _build_sam3():
-    import os
-    import site
-    import urllib.request
-
     from huggingface_hub import HfFolder, login
     from sam3.model_builder import build_sam3_image_model
-
-    dir = f"{site.getsitepackages()[0]}/assets"
-    file = "bpe_simple_vocab_16e6.txt.gz"
-
-    if not os.path.exists(f"{dir}/{file}"):
-        os.makedirs(dir, exist_ok=True)
-        url = f"https://raw.githubusercontent.com/facebookresearch/sam3/refs/heads/main/assets/{file}"
-        urllib.request.urlretrieve(url, f"{dir}/{file}")
 
     if not HfFolder.get_token():
         login()
 
-    return build_sam3_image_model()
+    bpe_path = os.path.join(os.path.dirname(__file__), "assets", "bpe_simple_vocab_16e6.txt.gz")
+    return build_sam3_image_model(bpe_path=bpe_path)
 
 
 def _execute_sam3(stack: "Stack", *prompt: str, model=None, confidence_threshold: float = 0.5):

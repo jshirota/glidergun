@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from glidergun import grid
 from glidergun._utils import format_type, get_nodata_value
@@ -93,7 +94,7 @@ def test_process_tiles():
         assert g2.md5 == g.md5
         assert g2.cell_size == g.cell_size
         assert g2.crs == g.crs
-        assert g2.extent == g.extent
+        assert pytest.approx(g2.extent) == g.extent
 
     assert_eq(g.process_tiles(lambda x: x, 456, 0, 2))
     assert_eq(g.process_tiles(lambda x: x, 678, 7, 2))

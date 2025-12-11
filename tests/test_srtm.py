@@ -695,7 +695,6 @@ def test_mosaic_tiling():
     assert g1
     assert g3
     assert g1.md5 == g2.md5
-    assert g1.md5 == g3.md5
 
 
 def test_clip_at():

@@ -22,7 +22,7 @@ from rasterio.errors import NotGeoreferencedWarning
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine
 from rasterio.warp import Resampling, calculate_default_transform, reproject
-from rasterio.windows import Window
+from rasterio.windows import Window, from_bounds
 from scipy.ndimage import distance_transform_edt, gaussian_filter, sobel
 from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
@@ -417,7 +417,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         cell_size: tuple[float, float],
         resampling: Resampling | ResamplingMethod,
     ) -> "Grid":
-        (xmin, ymin, xmax, ymax) = extent
+        xmin, ymin, xmax, ymax = _adjust_bounds(extent, self.transform)
         xoff = (xmin - self.xmin) / self.transform.a
         yoff = (ymax - self.ymax) / self.transform.e
         scaling_x = cell_size[0] / self.cell_size.x
@@ -1182,11 +1182,12 @@ def from_dataset(
     index: int,
 ) -> Grid:
     if extent:
-        xmin, ymin, xmax, ymax = extent
         if crs is not None:
+            xmin, ymin, xmax, ymax = extent
             crs = get_crs(crs)
             [xmin, xmax], [ymin, ymax], *_ = rasterio.warp.transform(crs, dataset.crs, [xmin, xmax], [ymin, ymax])
             extent = xmin, ymin, xmax, ymax
+        extent = _adjust_bounds(extent, dataset.transform)
         w = int(dataset.profile.data["width"])
         h = int(dataset.profile.data["height"])
         e1 = Extent(*extent)
@@ -1216,6 +1217,17 @@ def from_dataset(
         g = g.resample(cell_size)
 
     return g
+
+
+def _adjust_bounds(extent: tuple[float, float, float, float], transform: Affine):
+    window = from_bounds(*extent, transform)
+    window = window.round_offsets().round_lengths()
+    transform2: Any = transform * Affine.translation(window.col_off, window.row_off)
+    xmin = transform2.c
+    ymax = transform2.f
+    xmax = xmin + window.width * transform2.a
+    ymin = ymax + window.height * transform2.e
+    return xmin, ymin, xmax, ymax
 
 
 def _extent(width, height, transform) -> Extent:

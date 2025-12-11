@@ -59,6 +59,8 @@ def search(
         },
     )
 
+    response.raise_for_status()
+
     features: list[Feature] = []
 
     for feature in response.json()["features"]:
