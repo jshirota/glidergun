@@ -11,7 +11,7 @@ from glidergun._stack import stack
 from glidergun._types import Extent
 
 
-class Item(dict):
+class Feature(dict):
     def __init__(self, d: dict, extent: "Extent", crs: CRS, sign: bool):
         super().__init__(d)
         self.extent = extent
@@ -45,7 +45,7 @@ def search(
     url: str = "https://planetarycomputer.microsoft.com/api/stac/v1/search",
     max_cloud_cover: float = 5.0,
     query: dict | None = None,
-) -> list[Item]:
+) -> list[Feature]:
     search_extent = Extent(*extent)
     search_polygon = box(*extent)
     sign = url == "https://planetarycomputer.microsoft.com/api/stac/v1/search"
@@ -59,12 +59,12 @@ def search(
         },
     )
 
-    items: list[Item] = []
+    features: list[Feature] = []
 
     for feature in response.json()["features"]:
         if search_polygon.within(shape(feature["geometry"])):
             crs = CRS.from_epsg(feature["properties"]["proj:epsg"])
             projected_extent = search_extent.project(from_crs=CRS.from_epsg(4326), to_crs=crs)
-            items.append(Item(feature, projected_extent, crs, sign))
+            features.append(Feature(feature, projected_extent, crs, sign))
 
-    return items
+    return features

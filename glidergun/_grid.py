@@ -34,7 +34,7 @@ from glidergun._focal import Focal
 from glidergun._interpolation import Interpolation
 from glidergun._literals import BaseMap, ColorMap, DataType, ExtentResolution, ResamplingMethod
 from glidergun._types import CellSize, Chart, Extent, GridCore, PointValue, Scaler
-from glidergun._utils import create_directory, format_type, get_crs, get_driver, get_geojson, get_nodata_value
+from glidergun._utils import create_directory_for, format_type, get_crs, get_driver, get_geojson, get_nodata_value
 from glidergun._zonal import Zonal
 
 logger = logging.getLogger(__name__)
@@ -868,7 +868,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
             g = con(g.is_nan(), nodata, g)
 
         if isinstance(file, str):
-            create_directory(file)
+            create_directory_for(file)
             with rasterio.open(
                 file,
                 "w",

@@ -11,7 +11,7 @@ from shapely.geometry import Point, Polygon, mapping
 from glidergun._types import FeatureCollection
 
 
-def create_directory(file_path: str):
+def create_directory_for(file_path: str):
     directory = "/".join(re.split(r"/|\\", file_path)[0:-1])
     Path(directory).mkdir(parents=True, exist_ok=True)
 
