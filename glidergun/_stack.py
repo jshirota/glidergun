@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from functools import cached_property
 from io import BytesIO
-from typing import Any, Union, overload
+from typing import Union, overload
 
 import numpy as np
 import rasterio
@@ -20,7 +20,7 @@ from rasterio.io import MemoryFile
 from rasterio.warp import Resampling
 
 from glidergun._grid import Extent, Grid, _metadata, _to_uint8_range, con, from_dataset, pca, standardize
-from glidergun._literals import BaseMap, DataType, ResamplingMethod
+from glidergun._literals import DataType, ResamplingMethod
 from glidergun._quadkey import get_tiles
 from glidergun._sam import Sam
 from glidergun._types import CellSize, Chart, Scaler
@@ -116,8 +116,8 @@ class Stack(Sam):
         return self.grids[0].cell_size
 
     @property
-    def md5s(self) -> tuple[str, ...]:
-        return tuple(g.md5 for g in self.grids)
+    def sha256s(self) -> tuple[str, ...]:
+        return tuple(g.sha256 for g in self.grids)
 
     def __add__(self, n: Operand):
         return self._apply(n, lambda g, n: g.__add__(n))
@@ -259,30 +259,15 @@ class Stack(Sam):
             raise ValueError("Invalid bands specified.")
         return dataclasses.replace(self, display=rgb)
 
-    def map(
-        self,
-        opacity: float = 1.0,
-        basemap: BaseMap | Any | None = None,
-        width: int = 800,
-        height: int = 600,
-        attribution: str | None = None,
-        grayscale: bool = True,
-        **kwargs,
-    ):
-        """Create an interactive map overlay using folium."""
-        from glidergun._display import get_folium_map
-
-        return get_folium_map(self, opacity, basemap, width, height, attribution, grayscale, **kwargs)
-
     def each(self, func: Callable[[Grid], Grid]):
         """Applies a function to each band and returns a new `Stack`."""
         return stack(list(map(func, self.grids)))
 
-    def georeference(self, extent: tuple[float, float, float, float], crs: int | str | CRS | None = None):
+    def georeference(self, extent: tuple[float, float, float, float] | list[float], crs: int | str | CRS | None = None):
         """Assign extent and CRS to the current data without resampling."""
         return self.each(lambda g: g.georeference(extent, crs))
 
-    def clip(self, extent: tuple[float, float, float, float]):
+    def clip(self, extent: tuple[float, float, float, float] | list[float]):
         """Clips the stack to the given extent."""
         return self.each(lambda g: g.clip(extent))
 
@@ -390,14 +375,14 @@ class Stack(Sam):
 @overload
 def stack(
     data: str,
-    extent: tuple[float, float, float, float] | None = None,
+    extent: tuple[float, float, float, float] | list[float] | None = None,
     crs: int | str | CRS | None = None,
 ) -> Stack:
     """Creates a new stack from a file path or url.
 
     Args:
         data (str): File path or url.
-        extent (tuple[float, float, float, float]): Map extent used to clip the raster.
+        extent (tuple[float, float, float, float] | list[float]): Map extent used to clip the raster.
         crs (int | str | CRS | None): Coordinate reference system of the extent.
 
 
@@ -414,7 +399,7 @@ def stack(
 @overload
 def stack(
     data: str,
-    extent: tuple[float, float, float, float],
+    extent: tuple[float, float, float, float] | list[float],
     max_tiles: int = 10,
     request: Callable[[str], requests.Response] = requests.get,
 ) -> Stack:
@@ -422,7 +407,7 @@ def stack(
 
     Args:
         data (str): Tile service url template with {x}{y}{z} or {q} placeholders.
-        extent (tuple[float, float, float, float]): Map extent used to clip the raster.
+        extent (tuple[float, float, float, float] | list[float]): Map extent used to clip the raster.
         max_tiles (int, optional): Maximum number of tiles to load.  Defaults to 10.
 
     Example:
@@ -511,13 +496,15 @@ def stack(data: Sequence[Grid]) -> Stack:
 
 @overload
 def stack(
-    data: Sequence[str], extent: tuple[float, float, float, float] | None = None, crs: int | str | CRS | None = None
+    data: Sequence[str],
+    extent: tuple[float, float, float, float] | list[float] | None = None,
+    crs: int | str | CRS | None = None,
 ) -> Stack:
     """Creates a new stack from file paths or urls.
 
     Args:
         data: File paths or urls.
-        extent (tuple[float, float, float, float]): Map extent used to clip the raster.
+        extent (tuple[float, float, float, float] | list[float]): Map extent used to clip the raster.
         crs (int | str | CRS | None): Coordinate reference system of the extent.
 
     Example:
@@ -532,7 +519,7 @@ def stack(
 
 def stack(  # type: ignore
     data: str | DatasetReader | bytes | MemoryFile | Sequence[Grid] | Sequence[str],
-    extent: tuple[float, float, float, float] | None = None,
+    extent: tuple[float, float, float, float] | list[float] | None = None,
     crs: int | str | CRS | None = None,
     max_tiles: int | None = None,
     request: Callable[[str], requests.Response] = requests.get,
@@ -578,7 +565,7 @@ def stack(  # type: ignore
 
 
 def read_grids(
-    dataset, extent: tuple[float, float, float, float] | None, crs: int | str | CRS | None
+    dataset, extent: tuple[float, float, float, float] | list[float] | None, crs: int | str | CRS | None
 ) -> Iterator[Grid]:
     crs = get_crs(crs) if crs else None
     if dataset.subdatasets:
@@ -593,7 +580,7 @@ def read_grids(
 
 def from_tile_service(
     url_template: str,
-    extent: tuple[float, float, float, float],
+    extent: tuple[float, float, float, float] | list[float],
     max_tiles: int,
     max_zoom: int = 24,
     request: Callable[[str], requests.Response] = requests.get,

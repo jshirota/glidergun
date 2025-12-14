@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 from dataclasses import dataclass
@@ -11,7 +10,7 @@ from scipy.cluster.hierarchy import DisjointSet
 
 from glidergun._grid import Grid, con, grid, standardize
 from glidergun._types import FeatureCollection
-from glidergun._utils import create_directory_for, get_geojson
+from glidergun._utils import get_geojson, save_geojson
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +36,7 @@ class SamResult:
         )
 
     def save_geojson(self, file: str | IO[str], crs: int | str | CRS | None = 4326, smooth_factor: float = 0.0):
-        data = self.to_geojson(crs, smooth_factor)
-        if isinstance(file, str):
-            create_directory_for(file)
-            with open(file, "w") as f:
-                json.dump(data, f)
-        else:
-            json.dump(data, file)
+        save_geojson(self.to_geojson(crs, smooth_factor), file)
 
 
 @dataclass(frozen=True, slots=True)

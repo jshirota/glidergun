@@ -50,14 +50,14 @@ def tile_to_quadkey(x: int, y: int, zoom: int):
     return quadkey
 
 
-def get_tile_count_at_zoom(extent: tuple[float, float, float, float], zoom: int):
+def get_tile_count_at_zoom(extent: tuple[float, float, float, float] | list[float], zoom: int):
     xmin, ymin, xmax, ymax = extent
     x1, y1, _ = quadkey_to_tile(coords_to_quadkey(xmin, ymin, zoom))
     x2, y2, _ = quadkey_to_tile(coords_to_quadkey(xmax, ymax, zoom))
     return (abs(x2 - x1) + 1) * (abs(y2 - y1) + 1)
 
 
-def get_tiles_at_zoom(extent: tuple[float, float, float, float], zoom: int):
+def get_tiles_at_zoom(extent: tuple[float, float, float, float] | list[float], zoom: int):
     xmin, ymin, xmax, ymax = extent
     x1, y1, _ = quadkey_to_tile(coords_to_quadkey(xmin, ymin, zoom))
     x2, y2, _ = quadkey_to_tile(coords_to_quadkey(xmax, ymax, zoom))
@@ -69,7 +69,7 @@ def get_tiles_at_zoom(extent: tuple[float, float, float, float], zoom: int):
     return tiles
 
 
-def get_tiles(extent: tuple[float, float, float, float], max_tiles: int, max_zoom: int):
+def get_tiles(extent: tuple[float, float, float, float] | list[float], max_tiles: int, max_zoom: int):
     zoom = max_zoom
     while get_tile_count_at_zoom(extent, zoom) > max_tiles:
         zoom -= 1

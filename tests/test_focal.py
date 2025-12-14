@@ -124,16 +124,16 @@ class TestFocal:
 
     def test_compare_focal_mean(self, sample_grid: Grid):
         g1, g2 = self.get_focal_grids(sample_grid, Grid.focal_mean)
-        assert g1.md5 == g2.md5
+        assert g1.sha256 == g2.sha256
 
     def test_compare_focal_std(self, sample_grid: Grid):
         g1, g2 = self.get_focal_grids(sample_grid, Grid.focal_std)
-        assert g1.md5 == g2.md5
+        assert g1.sha256 == g2.sha256
 
     def test_compare_focal_sum(self, sample_grid: Grid):
         g1, g2 = self.get_focal_grids(sample_grid, Grid.focal_sum)
-        assert g1.md5 == g2.md5
+        assert g1.sha256 == g2.sha256
 
     def test_compare_focal_ptp(self, sample_grid: Grid):
         g1, g2 = self.get_focal_grids(sample_grid, Grid.focal_ptp)
-        assert g1.md5 == g2.md5
+        assert g1.sha256 == g2.sha256

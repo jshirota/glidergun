@@ -13,7 +13,7 @@ dem = grid("./tests/input/n55_e008_1arc_v3.bil")
 
 def test_aspect():
     g = dem.aspect(True)
-    assert g.round(4).md5 == "e203f3540ab892ab9c69b386af1b47e9"
+    assert g.round(4).sha256 == "44b804cbe617d622afa160589c5ccb685517c3fa9e3f036d2c7126fb6ec30d5f"
 
 
 def test_bins():
@@ -60,7 +60,7 @@ def test_buffer_2():
     g4 = g1.buffer(2, -1)
     g5 = g1.set_nan(~g4.is_nan(), g1)
     assert not g2.has_nan
-    assert g3.md5 == g1.md5
+    assert g3.sha256 == g1.sha256
     assert g4.has_nan
     assert pytest.approx(g5.min, 0.001) == 2
     assert pytest.approx(g5.max, 0.001) == 2
@@ -74,7 +74,7 @@ def test_buffer_3():
     g4 = g1.buffer(2, -1)
     g5 = g1.set_nan(~g4.is_nan(), g1)
     assert not g2.has_nan
-    assert g3.md5 == g1.md5
+    assert g3.sha256 == g1.sha256
     assert g4.has_nan
     assert pytest.approx(g5.min, 0.001) == 2
     assert pytest.approx(g5.max, 0.001) == 2
@@ -147,21 +147,21 @@ def test_focal_count_2():
 
 def test_focal_mean():
     g = dem.focal_mean()
-    assert g.md5 == "ed6fb3c2c2423caeb347ba02196d78a7"
+    assert g.sha256 == "f110551123e368bc61b3a1ed757341b532d66dc1394bf89432a8cde62f3341d3"
 
 
 def test_focal_mean_2():
     g1 = dem.resample(0.02)
     g2 = g1.focal_mean()
     g3 = g1.focal_generic(np.nanmean)
-    assert g2.md5 == g3.md5
+    assert g2.sha256 == g3.sha256
 
 
 def test_focal_mean_3():
     g1 = dem.resample(0.02)
     g2 = g1.focal_mean(3, True, False)
     g3 = g1.focal_generic(np.mean, 3, True, False)
-    assert g2.md5 == g3.md5
+    assert g2.sha256 == g3.sha256
 
 
 def test_focal_mean_4():
@@ -182,7 +182,7 @@ def test_from_polygons():
 
 def test_hillshade():
     g = dem.hillshade()
-    assert g.round().md5 == "c8e3c319fe198b0d87456b98b9fe7532"
+    assert g.round().sha256 == "026831fdf7236580d855d55664ce58c84a1589fe7fcb907483d29c4fd4874519"
 
 
 def test_interp_linear():
@@ -227,28 +227,28 @@ def test_op_mul():
     g = dem * 100
     assert pytest.approx(g.min, 0.001) == dem.min * 100
     assert pytest.approx(g.max, 0.001) == dem.max * 100
-    assert g.md5 == "7d8dc93fa345e9929ebebe630f2e1de3"
+    assert g.sha256 == "c397703b13b955de8b8a9b01bd7bbd85e67d0c9c36290bf28e01a92a60b9343c"
 
 
 def test_op_div():
     g = dem / 100
     assert pytest.approx(g.min, 0.001) == dem.min / 100
     assert pytest.approx(g.max, 0.001) == dem.max / 100
-    assert g.md5 == "76f6a23611dbb51577003a6b4d157875"
+    assert g.sha256 == "f96225558e2daa17250aca7dd42d4fd8770da4bcf9c53b49d25365b7688c3a16"
 
 
 def test_op_add():
     g = dem + 100
     assert pytest.approx(g.min, 0.001) == dem.min + 100
     assert pytest.approx(g.max, 0.001) == dem.max + 100
-    assert g.md5 == "7307a641931470f902b299e1b4271ee4"
+    assert g.sha256 == "1de1fc6df6036bf3e21bae6ffa787bbeb8e53480ebb48b10bad439afa48ac91e"
 
 
 def test_op_sub():
     g = dem - 100
     assert pytest.approx(g.min, 0.001) == dem.min - 100
     assert pytest.approx(g.max, 0.001) == dem.max - 100
-    assert g.md5 == "78cc4e4f5256715c1d37b0a7c0f54312"
+    assert g.sha256 == "cd7f7359c55df230dfcf60fec97ac56f1cd870699b6b94e117c8e759a6753ed0"
 
 
 def test_op_combined():
@@ -274,14 +274,14 @@ def test_op__floordiv():
     g = dem // 100
     assert pytest.approx(g.min, 0.001) == dem.min // 100
     assert pytest.approx(g.max, 0.001) == dem.max // 100
-    assert g.md5 == "ee1906003e3b983d57f95ea60a059501"
+    assert g.sha256 == "2f5fe97ac43559b606d67bb90ff037f1f2088a24586a4a0692d218df95d384b7"
 
 
 def test_op_neg():
     g = -dem
     assert pytest.approx(g.min, 0.001) == -dem.max
     assert pytest.approx(g.max, 0.001) == -dem.min
-    assert g.md5 == "1183b549226dd2858bcf1d62dd5202d1"
+    assert g.sha256 == "16e092bfac3a53eba37f8859096a92b85a6745c07ac831f7ae77943481ec1cd3"
 
 
 def test_op_pow_2():
@@ -291,8 +291,8 @@ def test_op_pow_2():
     assert pytest.approx(g1.max, 0.001) == dem.max**2
     assert pytest.approx(g2.min, 0.001) == 0
     assert pytest.approx(g2.max, 0.001) == dem.min**2
-    assert g1.md5 == "0c960de0b43e7b02e743303567f96ce5"
-    assert g2.md5 == "10c9394f2b483d07834cdd6e8e9d7604"
+    assert g1.sha256 == "13ae32f3cebfdc803fb25572acfda258920236c22ba3f39469117cfc7276063d"
+    assert g2.sha256 == "4f061de3459ba7f6dbd8801e50d28fbf43ed8e91b91e2a814f22d94642c7e649"
 
 
 def test_op_eq():
@@ -302,8 +302,8 @@ def test_op_eq():
     assert pytest.approx(g1.max, 0.001) == 1
     assert pytest.approx(g2.min, 0.001) == 1
     assert pytest.approx(g2.max, 0.001) == 1
-    assert g1.md5 == "d698aba6245e1475c46436f1bb52f46e"
-    assert g2.md5 == "d698aba6245e1475c46436f1bb52f46e"
+    assert g1.sha256 == "1ee570109149867b9908cd549a9b2137ad9b6e115534cfae23089630375f7ba7"
+    assert g2.sha256 == "1ee570109149867b9908cd549a9b2137ad9b6e115534cfae23089630375f7ba7"
 
 
 def test_to_points():
@@ -318,13 +318,13 @@ def test_to_points():
 def test_to_points_2():
     g1 = dem.resample(0.1).randomize()
     g2 = grid(g1.to_points(), g1.extent, g1.crs, g1.cell_size)
-    assert g1.md5 == g2.md5
+    assert g1.sha256 == g2.sha256
 
 
 def test_to_points_3():
     g1 = dem.resample(0.01234).randomize()
     g2 = grid(g1.to_points(), g1.extent, g1.crs, g1.cell_size)
-    assert g1.md5 == g2.md5
+    assert g1.sha256 == g2.sha256
 
 
 def test_to_stack():
@@ -361,7 +361,7 @@ def test_properties():
     assert dem.width == 1801
     assert dem.height == 3601
     assert dem.dtype == "float32"
-    assert dem.md5 == "09b41b3363bd79a87f28e3c5c4716724"
+    assert dem.sha256 == "58ba80fc92d5a3f11e0bd366bedd2bf5d3b620a9a56b0312a26e606e2b9b761d"
 
 
 def test_ptp():
@@ -423,7 +423,7 @@ def test_set_nan():
 
 def test_slope():
     g = dem.slope(True)
-    assert g.round(4).md5 == "b243cd938f0e1c06272740ffa14a4782"
+    assert g.round(4).sha256 == "5c467561e8b8b85dff2efe2d68bb96a3924586b612e79cc2366685fc9786df7b"
 
 
 def test_sin():
@@ -475,7 +475,7 @@ def save(g1: Grid, file: str, strict: bool = True):
     g1.save(file_path)
     g2 = grid(file_path)
     if strict:
-        assert g2.md5 == g1.md5
+        assert g2.sha256 == g1.sha256
     assert g2.extent == g1.extent
     shutil.rmtree(folder)
 
@@ -484,7 +484,7 @@ def test_save_memory():
     memory_file = rasterio.MemoryFile()
     dem.save(memory_file)
     g = grid(memory_file)
-    assert g.md5 == dem.md5
+    assert g.sha256 == dem.sha256
 
 
 def test_save_bil():
@@ -541,7 +541,7 @@ def test_mosaic_eager_vs_lazy():
     g1 = g.clip((8, 55, 8.5, 56))
     g2 = m.clip((8, 55, 8.5, 56))
     assert g2
-    assert g1.md5 == g2.md5
+    assert g1.sha256 == g2.sha256
 
 
 def test_tiling():
@@ -562,9 +562,9 @@ def test_tiling():
 def test_set_nan_2():
     g = dem.resample(0.02)
 
-    assert g.is_less_than(1).then(np.nan, g).md5 == g.set_nan(g < 1).md5
-    assert g.resample(0.04).set_nan(g < 1).md5 == g.resample(0.04).set_nan(lambda g: g < 1).md5
-    assert g.resample(0.04).con(lambda g: g < 1, np.nan).md5 == g.resample(0.04).set_nan(lambda g: g < 1).md5
+    assert g.is_less_than(1).then(np.nan, g).sha256 == g.set_nan(g < 1).sha256
+    assert g.resample(0.04).set_nan(g < 1).sha256 == g.resample(0.04).set_nan(lambda g: g < 1).sha256
+    assert g.resample(0.04).con(lambda g: g < 1, np.nan).sha256 == g.resample(0.04).set_nan(lambda g: g < 1).sha256
 
 
 def test_capping():
@@ -662,7 +662,7 @@ def test_con_2():
     assert g3.extent == g.extent
 
     g4 = (~g1.is_nan()).then(2, 1)
-    assert g4.md5 == g2.md5
+    assert g4.sha256 == g2.sha256
 
 
 def test_tiling_2():
@@ -678,7 +678,7 @@ def test_tiling_2():
     assert g2
     assert g2.cell_size == g1.cell_size
     assert g2.crs == g1.crs
-    assert g2.md5 == g1.md5
+    assert g2.sha256 == g1.sha256
     shutil.rmtree(folder)
 
 
@@ -694,7 +694,7 @@ def test_mosaic_tiling():
         g3 = tile if g3 is None else g3.mosaic(tile)
     assert g1
     assert g3
-    assert g1.md5 == g2.md5
+    assert g1.sha256 == g2.sha256
 
 
 def test_clip_at():
@@ -718,4 +718,4 @@ def test_idw():
 
 
 def test_bytes():
-    assert grid(dem.to_bytes()).md5 == dem.md5
+    assert grid(dem.to_bytes()).sha256 == dem.sha256
