@@ -42,6 +42,7 @@ class Interpolation:
         Returns:
             Grid: Interpolated grid.
         """
+
         def f(coords, values):
             return CloughTocher2DInterpolator(coords, values, fill_value, tol, maxiter, rescale)
 
@@ -68,6 +69,7 @@ class Interpolation:
         Returns:
             Grid: Interpolated grid.
         """
+
         def f(coords, values):
             return LinearNDInterpolator(coords, values, fill_value, rescale)
 
@@ -94,6 +96,7 @@ class Interpolation:
         Returns:
             Grid: Interpolated grid.
         """
+
         def f(coords, values):
             return NearestNDInterpolator(coords, values, rescale, tree_options)
 
@@ -126,6 +129,7 @@ class Interpolation:
         Returns:
             Grid: Interpolated grid.
         """
+
         def f(coords, values):
             return RBFInterpolator(coords, values, neighbors, smoothing, kernel, epsilon, degree)
 
@@ -138,7 +142,7 @@ class Interpolation:
 def interpolate(
     interpolator_factory: Callable[[ndarray, ndarray], Any],
     points: Sequence[tuple[float, float, float]],
-    extent: tuple[float, float, float, float],
+    extent: tuple[float, float, float, float] | list[float],
     crs: int | str | CRS,
     cell_size: tuple[float, float] | float,
 ):

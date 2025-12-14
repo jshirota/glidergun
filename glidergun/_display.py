@@ -1,4 +1,3 @@
-from base64 import b64encode
 from collections.abc import Iterable
 from typing import Any
 
@@ -9,75 +8,6 @@ from matplotlib.animation import ArtistAnimation
 from glidergun._grid import Grid
 from glidergun._literals import ColorMap
 from glidergun._stack import Stack
-from glidergun._types import Extent
-
-
-def get_folium_map(
-    obj: Grid | Stack,
-    opacity: float,
-    basemap,
-    width: int,
-    height: int,
-    attribution: str | None,
-    grayscale: bool = True,
-    **kwargs,
-):
-    import folium
-    import jinja2
-
-    obj_4326 = obj.project(4326)
-
-    extent = Extent(obj_4326.xmin, max(obj_4326.ymin, -85), obj_4326.xmax, min(obj_4326.ymax, 85))
-
-    if obj_4326.extent != extent:
-        obj_4326 = obj_4326.clip(extent)
-
-    obj_3857 = obj_4326.project(3857)
-
-    figure = folium.Figure(width=str(width), height=str(height))
-    bounds = [[obj_4326.ymin, obj_4326.xmin], [obj_4326.ymax, obj_4326.xmax]]
-
-    if isinstance(basemap, str) or basemap is None:
-        if basemap:
-            if not basemap.startswith("https://"):
-                if basemap == "OpenStreetMap":
-                    attribution = "&copy OpenStreetMap"
-                else:
-                    basemap = "https://{s}.basemaps.cartocdn.com/" + basemap + "/{z}/{x}/{y}{r}.png"
-                    attribution = "&copy OpenStreetMap &copy CARTO"
-            tile_layer = folium.TileLayer(basemap, attr=attribution)
-        else:
-            tile_layer = folium.TileLayer(
-                tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-                attr="&copy; Esri",
-            )
-
-        options = {"zoom_control": False, **kwargs}
-        folium_map = folium.Map(tiles=tile_layer, **options).add_to(figure)
-        folium_map.fit_bounds(bounds)  # type: ignore
-
-        if grayscale:
-            macro = folium.MacroElement().add_to(folium_map)
-            macro._template = jinja2.Template(
-                f"""
-                {{% macro script(this, kwargs) %}}
-                tile_layer_{tile_layer._id}.getContainer()
-                    .setAttribute("style", "filter: grayscale(100%); -webkit-filter: grayscale(100%);")
-                {{% endmacro %}}
-                """
-            )
-    else:
-        folium_map = basemap
-
-    color: Any = obj.display
-
-    folium.raster_layers.ImageOverlay(  # type: ignore
-        image=f"data:image/png;base64, {b64encode(obj_3857.color(color)._thumbnail((20, 20))).decode()}",
-        bounds=bounds,
-        opacity=opacity,
-    ).add_to(folium_map)
-
-    return folium_map
 
 
 def get_html(obj: Grid | Stack | ArtistAnimation):

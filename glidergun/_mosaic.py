@@ -49,7 +49,7 @@ class Mosaic:
                 with rasterio.open(f) as dataset:
                     yield f, SimpleNamespace(**dataset.profile)
 
-    def _read(self, extent: tuple[float, float, float, float], index: int):
+    def _read(self, extent: tuple[float, float, float, float] | list[float], index: int):
         for f, e in self.files.items():
             try:
                 if e.intersects(extent):
@@ -61,7 +61,7 @@ class Mosaic:
         self,
         width: float,
         height: float,
-        clip_extent: tuple[float, float, float, float] | None = None,
+        clip_extent: tuple[float, float, float, float] | list[float] | None = None,
     ):
         """Iterate over clipped mosaicked tiles of the requested size.
 
@@ -80,12 +80,12 @@ class Mosaic:
             yield g
 
     @overload
-    def clip(self, extent: tuple[float, float, float, float], index: int = 1) -> Grid | None: ...
+    def clip(self, extent: tuple[float, float, float, float] | list[float], index: int = 1) -> Grid | None: ...
 
     @overload
-    def clip(self, extent: tuple[float, float, float, float], index: tuple[int, ...]) -> Stack | None: ...
+    def clip(self, extent: tuple[float, float, float, float] | list[float], index: tuple[int, ...]) -> Stack | None: ...
 
-    def clip(self, extent: tuple[float, float, float, float], index=None):
+    def clip(self, extent: tuple[float, float, float, float] | list[float], index=None):
         if not index or isinstance(index, int):
             grids: list[Grid] = [g for g in self._read(extent, index or 1) if g]
             if grids:

@@ -32,7 +32,7 @@ from sklearn.preprocessing import StandardScaler
 
 from glidergun._focal import Focal
 from glidergun._interpolation import Interpolation
-from glidergun._literals import BaseMap, ColorMap, DataType, ExtentResolution, ResamplingMethod
+from glidergun._literals import ColorMap, DataType, ExtentResolution, ResamplingMethod
 from glidergun._types import CellSize, Chart, Extent, GridCore, PointValue, Scaler
 from glidergun._utils import create_directory_for, format_type, get_crs, get_driver, get_geojson, get_nodata_value
 from glidergun._zonal import Zonal
@@ -363,7 +363,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         """Round per cell to `decimals`."""
         return self.local(lambda a: np.round(a, decimals))
 
-    def georeference(self, extent: tuple[float, float, float, float], crs: int | str | CRS | None = None):
+    def georeference(self, extent: tuple[float, float, float, float] | list[float], crs: int | str | CRS | None = None):
         """Assign extent and CRS to the current data without resampling."""
         return grid(self.data, extent, get_crs(crs) if crs else self.crs)
 
@@ -413,11 +413,11 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 
     def _resample(
         self,
-        extent: tuple[float, float, float, float],
+        extent: tuple[float, float, float, float] | list[float],
         cell_size: tuple[float, float],
         resampling: Resampling | ResamplingMethod,
     ) -> "Grid":
-        xmin, ymin, xmax, ymax = _adjust_bounds(extent, self.transform)
+        xmin, ymin, xmax, ymax = _adjust_extent(extent, self.transform)
         xoff = (xmin - self.xmin) / self.transform.a
         yoff = (ymax - self.ymax) / self.transform.e
         scaling_x = cell_size[0] / self.cell_size.x
@@ -427,7 +427,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         height = (ymax - ymin) / abs(self.transform.e) / scaling_y
         return self._reproject(transform, self.crs, width, height, resampling)
 
-    def clip(self, extent: tuple[float, float, float, float]):
+    def clip(self, extent: tuple[float, float, float, float] | list[float]):
         """Clip to the given extent (same CRS), preserving cell size."""
         return self._resample(extent, self.cell_size, Resampling.nearest)
 
@@ -805,21 +805,6 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         """Return a Grid with a different display colormap (for previews/maps)."""
         return dataclasses.replace(self, display=cmap)
 
-    def map(
-        self,
-        opacity: float = 1.0,
-        basemap: BaseMap | Any | None = None,
-        width: int = 800,
-        height: int = 600,
-        attribution: str | None = None,
-        grayscale: bool = True,
-        **kwargs,
-    ):
-        """Create an interactive map overlay using folium."""
-        from glidergun._display import get_folium_map
-
-        return get_folium_map(self, opacity, basemap, width, height, attribution, grayscale, **kwargs)
-
     def type(self, dtype: DataType, nan_to_num: float | None = None):
         """Convert dtype; optionally replace NaNs before casting."""
         if self.dtype == dtype:
@@ -893,7 +878,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 @overload
 def grid(
     data: str,
-    extent: tuple[float, float, float, float] | None = None,
+    extent: tuple[float, float, float, float] | list[float] | None = None,
     crs: int | str | CRS | None = None,
     cell_size: tuple[float, float] | float | None = None,
     index: int = 1,
@@ -919,7 +904,7 @@ def grid(
 @overload
 def grid(  # type: ignore
     data: DatasetReader,
-    extent: tuple[float, float, float, float] | None = None,
+    extent: tuple[float, float, float, float] | list[float] | None = None,
     crs: int | str | CRS | None = None,
     cell_size: tuple[float, float] | float | None = None,
     index: int = 1,
@@ -947,7 +932,7 @@ def grid(  # type: ignore
 @overload
 def grid(
     data: bytes,
-    extent: tuple[float, float, float, float] | None = None,
+    extent: tuple[float, float, float, float] | list[float] | None = None,
     crs: int | str | CRS | None = None,
     cell_size: tuple[float, float] | float | None = None,
     index: int = 1,
@@ -973,7 +958,7 @@ def grid(
 @overload
 def grid(  # type: ignore
     data: MemoryFile,
-    extent: tuple[float, float, float, float] | None = None,
+    extent: tuple[float, float, float, float] | list[float] | None = None,
     crs: int | str | CRS | None = None,
     cell_size: tuple[float, float] | float | None = None,
     index: int = 1,
@@ -999,7 +984,7 @@ def grid(  # type: ignore
 @overload
 def grid(
     data: ndarray,
-    extent: tuple[float, float, float, float] | Affine | None = None,
+    extent: tuple[float, float, float, float] | list[float] | Affine | None = None,
     crs: int | str | CRS = 4326,
 ) -> Grid:
     """Creates a new grid from an array.
@@ -1022,7 +1007,7 @@ def grid(
 @overload
 def grid(
     data: tuple[int, int],
-    extent: tuple[float, float, float, float] | None = None,
+    extent: tuple[float, float, float, float] | list[float] | None = None,
     crs: int | str | CRS = 4326,
 ) -> Grid:
     """Creates a new grid from a tuple (width, height).
@@ -1045,7 +1030,7 @@ def grid(
 @overload
 def grid(
     data: int | float,
-    extent: tuple[float, float, float, float],
+    extent: tuple[float, float, float, float] | list[float],
     crs: int | str | CRS,
     cell_size: tuple[float, float] | float,
 ) -> Grid:
@@ -1070,7 +1055,7 @@ def grid(
 @overload
 def grid(
     data: Iterable[tuple[BaseGeometry, float] | tuple[float, float, float]],
-    extent: tuple[float, float, float, float],
+    extent: tuple[float, float, float, float] | list[float],
     crs: int | str | CRS,
     cell_size: tuple[float, float] | float,
 ) -> Grid:
@@ -1102,7 +1087,7 @@ def grid(
     | int
     | float
     | Iterable[tuple[float, float, float] | tuple[BaseGeometry, float]],
-    extent: tuple[float, float, float, float] | Affine | None = None,
+    extent: tuple[float, float, float, float] | list[float] | Affine | None = None,
     crs: int | str | CRS | None = None,
     cell_size: tuple[float, float] | float | None = None,
     index: int = 1,
@@ -1136,7 +1121,7 @@ def grid(
 
 def from_shapes(
     shapes: Iterable[tuple[float, float, float] | tuple[BaseGeometry, float]],
-    extent: tuple[float, float, float, float],
+    extent: tuple[float, float, float, float] | list[float],
     crs: CRS,
     cell_size: tuple[float, float] | float,
 ):
@@ -1146,7 +1131,7 @@ def from_shapes(
 
 def from_constant(
     data: int | float,
-    extent: tuple[float, float, float, float],
+    extent: tuple[float, float, float, float] | list[float],
     crs: CRS,
     cell_size: tuple[float, float] | float,
 ):
@@ -1162,7 +1147,7 @@ def from_constant(
 
 def from_ndarray(
     data: ndarray,
-    extent: tuple[float, float, float, float] | Affine,
+    extent: tuple[float, float, float, float] | list[float] | Affine,
     crs: CRS,
 ):
     if isinstance(extent, Affine):
@@ -1176,7 +1161,7 @@ def from_ndarray(
 
 def from_dataset(
     dataset: DatasetReader,
-    extent: tuple[float, float, float, float] | None,
+    extent: tuple[float, float, float, float] | list[float] | None,
     crs: int | str | CRS | None,
     cell_size: tuple[float, float] | float | None,
     index: int,
@@ -1187,7 +1172,7 @@ def from_dataset(
             crs = get_crs(crs)
             [xmin, xmax], [ymin, ymax], *_ = rasterio.warp.transform(crs, dataset.crs, [xmin, xmax], [ymin, ymax])
             extent = xmin, ymin, xmax, ymax
-        extent = _adjust_bounds(extent, dataset.transform)
+        extent = _adjust_extent(extent, dataset.transform)
         w = int(dataset.profile.data["width"])
         h = int(dataset.profile.data["height"])
         e1 = Extent(*extent)
@@ -1219,15 +1204,16 @@ def from_dataset(
     return g
 
 
-def _adjust_bounds(extent: tuple[float, float, float, float], transform: Affine):
-    window = from_bounds(*extent, transform)
+def _adjust_extent(extent: tuple[float, float, float, float] | list[float], transform: Affine):
+    xmin, ymin, xmax, ymax = extent
+    window = from_bounds(xmin, ymin, xmax, ymax, transform)
     window = window.round_offsets().round_lengths()
     transform2: Any = transform * Affine.translation(window.col_off, window.row_off)
-    xmin = transform2.c
-    ymax = transform2.f
-    xmax = xmin + window.width * transform2.a
-    ymin = ymax + window.height * transform2.e
-    return xmin, ymin, xmax, ymax
+    xmin2 = transform2.c
+    ymax2 = transform2.f
+    xmax2 = xmin2 + window.width * transform2.a
+    ymin2 = ymax2 + window.height * transform2.e
+    return xmin2, ymin2, xmax2, ymax2
 
 
 def _extent(width, height, transform) -> Extent:
@@ -1347,7 +1333,7 @@ def maximum(*grids: Grid) -> Grid:
 
 def idw(
     points: Sequence[tuple[float, float, float]],
-    extent: tuple[float, float, float, float],
+    extent: tuple[float, float, float, float] | list[float],
     crs: int | str | CRS,
     cell_size: tuple[float, float] | float,
     radius: float | None = None,
