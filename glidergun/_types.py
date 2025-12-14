@@ -42,18 +42,18 @@ class Extent(NamedTuple):
     def assert_valid(self):
         assert self.is_valid, f"Invalid extent: {self}"
 
-    def contains(self, extent: tuple[float, float, float, float]):
+    def contains(self, extent: tuple[float, float, float, float] | list[float]):
         xmin, ymin, xmax, ymax = extent
         return self.xmin <= xmin and self.xmax >= xmax and self.ymin <= ymin and self.ymax >= ymax
 
-    def intersects(self, extent: tuple[float, float, float, float]):
+    def intersects(self, extent: tuple[float, float, float, float] | list[float]):
         xmin, ymin, xmax, ymax = extent
         return self.xmin < xmax and self.xmax > xmin and self.ymin < ymax and self.ymax > ymin
 
-    def intersect(self, extent: tuple[float, float, float, float]):
+    def intersect(self, extent: tuple[float, float, float, float] | list[float]):
         return Extent(*[f(x) for f, x in zip((max, max, min, min), zip(self, extent, strict=False), strict=False)])
 
-    def union(self, extent: tuple[float, float, float, float]):
+    def union(self, extent: tuple[float, float, float, float] | list[float]):
         return Extent(*[f(x) for f, x in zip((min, min, max, max), zip(self, extent, strict=False), strict=False)])
 
     def project(self, from_crs: int | str | CRS, to_crs: int | str | CRS):

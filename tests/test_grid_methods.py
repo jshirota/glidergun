@@ -54,7 +54,7 @@ def test_grid_interp_clough_tocher():
     assert g.cell_size == (1.0, 1.0)
     assert g.value_at(2, 2) == 12.54273509979248
     assert g.has_nan is True
-    assert g.md5 == "292a3f1ccc57fb50ac1dd8fa183cef3d"
+    assert g.sha256 == "8c972e4687e1b3548c7799ca5b7f40e069e02d91c829a14cac57b6945d550b08"
 
 
 def test_grid_interp_linear():
@@ -66,7 +66,7 @@ def test_grid_interp_linear():
     assert g.cell_size == (1.0, 1.0)
     assert g.value_at(2, 2) == 12.54273509979248
     assert g.has_nan is True
-    assert g.md5 == "993f7adb314bf2f48f447fd685230711"
+    assert g.sha256 == "7f16929a87f9e8f81ca58fbab55f8a007547c790f42aa8ea8f2b10b1f9ce7ae4"
 
 
 def test_grid_interp_nearest():
@@ -79,7 +79,7 @@ def test_grid_interp_nearest():
     assert g.value_at(30, 30) == 777
     assert g.value_at(40, 30) == 123
     assert g.has_nan is False
-    assert g.md5 == "4de29fbe3e04e25ee55c3eff4cf553d0"
+    assert g.sha256 == "9e473990c51c3647ee8b1f80475c558ba781e5aed97e0dc9b5950d7735a4d5ba"
 
 
 def test_grid_interp_rbf():
@@ -91,7 +91,7 @@ def test_grid_interp_rbf():
     assert g.cell_size == (1.0, 1.0)
     assert g.value_at(2, 2) == 12.54273509979248
     assert g.has_nan is False
-    assert g.md5 == "47087fd42c4e7e7e79c49cb53604b99a"
+    assert g.sha256 == "6f6a07bb0b3c5e827cef96c956899f2e82bcc8d042b8f1f9544d8eaa3844250b"
 
 
 def test_grid_interp_compare():

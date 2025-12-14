@@ -6,29 +6,20 @@ Inspired by the ARC/INFO GRID implementation of [Map Algebra](https://en.m.wikip
 pip install glidergun
 ```
 
-### Conway's Game of Life
+### Copernicus DEM
 
 ```python
-from glidergun import animate, grid
+from glidergun import grid
 
-def tick(g):
-    count = g.focal_sum() - g
-    return (g == 1) & (count == 2) | (count == 3)
+dem = grid("cop-dem-glo-90", (137.8, 34.5, 141.1, 36.8))
+hillshade = dem.hillshade()
 
-def simulate(g):
-    md5s = set()
-    while g.md5 not in md5s:
-        md5s.add(g.md5)
-        yield -(g := tick(g))
+dem.save("dem.tif")
+hillshade.save("hillshade.tif", "uint8")
 
-seed = grid((120, 80)).randomize() < 0.5
-
-animate(simulate(seed), interval=40)
 ```
 
-<img src="game_of_life.gif" width="600"/>
-
-<a href="glidergun.ipynb" style="font-size:16px;">More Examples</a>
+<a href="https://github.com/jshirota/glidergun/blob/main/glidergun.ipynb" style="font-size:16px;">More Examples</a>
 
 ### License
 

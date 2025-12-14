@@ -1,24 +1,18 @@
 import hashlib
 import shutil
+from functools import lru_cache
 
 import rasterio
 
-from glidergun import grid, stack
+from glidergun import grid, search
 
 dem = grid("./tests/input/n55_e008_1arc_v3.bil").resample(0.01)
 dem_color = grid("./tests/input/n55_e008_1arc_v3.bil").resample(0.01).color("terrain")
 
-landsat = stack(
-    [
-        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B1.TIF",
-        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B2.TIF",
-        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B3.TIF",
-        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B4.TIF",
-        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B5.TIF",
-        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B6.TIF",
-        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B7.TIF",
-    ]
-)
+
+@lru_cache
+def landsat():
+    return search("landsat-c2-l2", [-122.52, 37.70, -122.35, 37.82])[0].download(["red", "green", "blue"])
 
 
 def save(obj, file_name):
@@ -72,32 +66,22 @@ def test_saving_dem_color_bil():
 
 
 def test_saving_landsat_jpg():
-    hash, compress = save(landsat.color((5, 4, 3)), "tests/output/temp/landsat_543_1.jpg")
-    assert hash
-
-    hash, compress = save(landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_2.jpg")
+    hash, compress = save(landsat(), "tests/output/temp/landsat.jpg")
     assert hash
 
 
 def test_saving_landsat_tif():
-    hash1, compress1 = save(landsat.color((5, 4, 3)), "tests/output/temp/landsat_543_1.tif")
-    hash2, compress2 = save(landsat.color((1, 2, 3)), "tests/output/temp/landsat_543_2.tif")
-    assert hash1 == hash2
-
-    hash, compress = save(landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_3.tif")
+    hash, compress = save(landsat(), "tests/output/temp/landsat.tif")
+    assert hash
     assert compress == "lzw"
 
 
 def test_saving_landsat_img():
-    hash1, compress1 = save(landsat.color((5, 4, 3)), "tests/output/temp/landsat_543_1.img")
-    hash2, compress2 = save(landsat.color((1, 2, 3)), "tests/output/temp/landsat_543_2.img")
-    assert hash1 == hash2
-
-    hash, compress = save(landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_3.img")
-    assert hash == "700167ccacd6f63a3f46fcf7c2e41f71"
+    hash, compress = save(landsat(), "tests/output/temp/landsat.img")
+    assert hash == "26e4ab9b427d1345b05f3f42d027c98b"
 
 
 def test_saving_landsat_bil():
-    hash, compress = save(landsat.extract_bands(5, 4, 3), "tests/output/temp/landsat_543_2.bil")
-    assert hash == "ff0b8c95a824c9550d12c203132ca4a9"
+    hash, compress = save(landsat(), "tests/output/temp/landsat.bil")
+    assert hash == "ffebffa15b222c705c82fce896b860e7"
     assert compress is None

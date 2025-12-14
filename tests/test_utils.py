@@ -91,7 +91,7 @@ def test_process_tiles():
     g = grid("tests/input/n55_e008_1arc_v3.bil")
 
     def assert_eq(g2):
-        assert g2.md5 == g.md5
+        assert g2.sha256 == g.sha256
         assert g2.cell_size == g.cell_size
         assert g2.crs == g.crs
         assert pytest.approx(g2.extent) == g.extent

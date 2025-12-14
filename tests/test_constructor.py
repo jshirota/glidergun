@@ -10,9 +10,7 @@ def test_file():
 
 
 def test_dataset():
-    with rasterio.open(
-        "tests/input/LC08_L2SP_197021_20220324_20220330_02_T1_SR_B1.TIF"
-    ) as dataset:
+    with rasterio.open("./tests/input/n55_e008_1arc_v3.bil") as dataset:
         g = grid(dataset)
         assert g
 

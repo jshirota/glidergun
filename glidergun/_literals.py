@@ -1,15 +1,5 @@
 from typing import Literal
 
-BaseMap = Literal[
-    "OpenStreetMap",
-    "light_all",
-    "light_nolabels",
-    "light_only_labels",
-    "dark_all",
-    "dark_nolabels",
-    "dark_only_labels",
-]
-
 ColorMap = Literal[
     "Accent",
     "Accent_r",
@@ -204,13 +194,6 @@ InterpolationKernel = Literal[
     "inverse_multiquadric",
     "inverse_quadratic",
     "gaussian",
-]
-
-PredictorType = Literal[
-    "linear_regression",
-    "polynomial_regression",
-    "random_forest_classifier",
-    "random_forest_regression",
 ]
 
 ResamplingMethod = Literal[
