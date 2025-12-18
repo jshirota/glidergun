@@ -57,7 +57,7 @@ def test_percent_clip():
 
 
 def test_to_uint8_range():
-    s = sentinel().each(_to_uint8_range)
+    s = sentinel().each(lambda _, g: _to_uint8_range(g))
     for g in s.grids:
         assert pytest.approx(g.min, 0.001) == 0
         assert pytest.approx(g.max, 0.001) == 255

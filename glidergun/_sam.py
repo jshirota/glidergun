@@ -2,15 +2,13 @@ import logging
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import IO, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from rasterio.crs import CRS
-from scipy.cluster.hierarchy import DisjointSet
 
+from glidergun._geojson import FeatureCollection
 from glidergun._grid import Grid, con, grid, standardize
-from glidergun._types import FeatureCollection
-from glidergun._utils import get_geojson, save_geojson
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +26,10 @@ class SamResult:
         return grid(polygons, self.source.extent, self.source.crs, self.source.cell_size) == 1
 
     def highlight(self, *labels: str) -> "Stack":
-        return self.source.each(lambda g: con(self.mask(*labels), g, g / 5)).type("uint8", 0)
+        return self.source.each(lambda _, g: con(self.mask(*labels), g, g / 5)).type("uint8", 0)
 
-    def to_geojson(self, crs: int | str | CRS | None = 4326, smooth_factor: float = 0.0) -> FeatureCollection:
-        return get_geojson(
-            (mask.to_polygon(crs, smooth_factor), {"label": mask.label, "score": mask.score}) for mask in self.masks
-        )
-
-    def save_geojson(self, file: str | IO[str], crs: int | str | CRS | None = 4326, smooth_factor: float = 0.0):
-        save_geojson(self.to_geojson(crs, smooth_factor), file)
+    def to_geojson(self):
+        return FeatureCollection((m.to_polygon(4326), {"label": m.label, "score": m.score}) for m in self.masks)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,17 +38,17 @@ class SamMask:
     score: float
     mask: Grid
 
-    def to_polygon(self, crs: int | str | CRS | None = None, smooth_factor: float = 0.0):
+    def to_polygon(self, crs: int | str | CRS | None = None):
         g = self.mask.set_nan(0)
         if crs:
             g = g.project(crs)
-        polygons = [polygon for polygon, value in g.to_polygons(smooth_factor=smooth_factor) if value == 1]
+        polygons = [polygon for polygon, value in g.to_polygons() if value == 1]
         return max(polygons, key=lambda p: p.area)
 
 
 @dataclass(frozen=True)
 class Sam:
-    def sam3(self, *prompt: str, model=None, confidence_threshold: float = 0.5, tile_size: int = 500):
+    def sam3(self, *prompt: str, model=None, confidence_threshold: float = 0.5, tile_size: int = 1024):
         """Run Segment Anything Model 3 (SAM 3) over the stack with text prompts.
 
         Args:
@@ -66,6 +59,8 @@ class Sam:
         Returns:
             SamResult: Collection of masks and an overview visualization stack.
         """
+        from scipy.cluster.hierarchy import DisjointSet
+
         self = cast("Stack", self)
 
         buffer = 0.1

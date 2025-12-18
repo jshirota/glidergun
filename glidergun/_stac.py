@@ -1,6 +1,5 @@
 from typing import Literal, Never, cast, overload
 
-import planetary_computer as pc
 import requests
 from pystac.item import Item as PystacItem
 from rasterio.crs import CRS
@@ -26,6 +25,8 @@ class ItemBase(PystacItem):
             raise ValueError(f"Asset '{asset}' not found in item assets: {list(self.assets.keys())}")
         url = self.assets[asset].href
         if self.url == planetary_computer_url:
+            import planetary_computer as pc
+
             return pc.sign(url)
         return url
 

@@ -5,12 +5,6 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 from numpy import ndarray
 from rasterio.crs import CRS
-from scipy.interpolate import (
-    CloughTocher2DInterpolator,
-    LinearNDInterpolator,
-    NearestNDInterpolator,
-    RBFInterpolator,
-)
 
 from glidergun._literals import InterpolationKernel
 
@@ -42,6 +36,7 @@ class Interpolation:
         Returns:
             Grid: Interpolated grid.
         """
+        from scipy.interpolate import CloughTocher2DInterpolator
 
         def f(coords, values):
             return CloughTocher2DInterpolator(coords, values, fill_value, tol, maxiter, rescale)
@@ -69,6 +64,7 @@ class Interpolation:
         Returns:
             Grid: Interpolated grid.
         """
+        from scipy.interpolate import LinearNDInterpolator
 
         def f(coords, values):
             return LinearNDInterpolator(coords, values, fill_value, rescale)
@@ -96,6 +92,7 @@ class Interpolation:
         Returns:
             Grid: Interpolated grid.
         """
+        from scipy.interpolate import NearestNDInterpolator
 
         def f(coords, values):
             return NearestNDInterpolator(coords, values, rescale, tree_options)
@@ -129,6 +126,7 @@ class Interpolation:
         Returns:
             Grid: Interpolated grid.
         """
+        from scipy.interpolate import RBFInterpolator
 
         def f(coords, values):
             return RBFInterpolator(coords, values, neighbors, smoothing, kernel, epsilon, degree)
