@@ -164,3 +164,207 @@ def test_invert():
     result = ~g
     expected = grid(np.array([[0, 1], [0, 1]]))
     assert np.array_equal(result.data, expected.data)
+
+
+def test_uint_and():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("uint8")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("uint8")
+    result = g1 & g2
+    assert result.dtype == "uint8"
+
+
+def test_uint_or():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("uint8")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("uint8")
+    result = g1 | g2
+    assert result.dtype == "uint8"
+
+
+def test_uint_xor():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("uint8")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("uint8")
+    result = g1 ^ g2
+    assert result.dtype == "uint8"
+
+
+def test_uint_rshift():
+    g = grid(np.array([[4, 8], [16, 32]])).type("uint8")
+    result = g >> 1
+    assert result.dtype == "uint8"
+
+
+def test_uint_lshift():
+    g = grid(np.array([[4, 8], [16, 32]])).type("uint8")
+    result = g << 1
+    assert result.dtype == "uint8"
+
+
+def test_uint_neg():
+    g = grid(np.array([[0, 1], [2, 3]])).type("uint8")
+    result = -g
+    assert result.dtype == "float32"
+
+
+def test_uint_pos():
+    g = grid(np.array([[0, 1], [2, 3]])).type("uint8")
+    result = +g
+    assert result.dtype == "float32"
+
+
+def test_uint_invert():
+    g = grid(np.array([[1, 0], [1, 0]])).type("uint8")
+    result = ~g
+    assert result.dtype == "bool"
+
+
+def test_int_and():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("int8")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("int8")
+    result = g1 & g2
+    assert result.dtype == "int8"
+
+
+def test_int_or():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("int8")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("int8")
+    result = g1 | g2
+    assert result.dtype == "int8"
+
+
+def test_int_xor():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("int8")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("int8")
+    result = g1 ^ g2
+    assert result.dtype == "int8"
+
+
+def test_int_rshift():
+    g = grid(np.array([[4, 8], [16, 32]])).type("int8")
+    result = g >> 1
+    assert result.dtype == "int8"
+
+
+def test_int_lshift():
+    g = grid(np.array([[4, 8], [16, 32]])).type("int8")
+    result = g << 1
+    assert result.dtype == "int8"
+
+
+def test_int_neg():
+    g = grid(np.array([[0, 1], [2, 3]])).type("int8")
+    result = -g
+    assert result.dtype == "float32"
+
+
+def test_int_pos():
+    g = grid(np.array([[0, 1], [2, 3]])).type("int8")
+    result = +g
+    assert result.dtype == "float32"
+
+
+def test_int_invert():
+    g = grid(np.array([[1, 0], [1, 0]])).type("int8")
+    result = ~g
+    assert result.dtype == "bool"
+
+
+def test_int16_and():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("int16")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("int16")
+    result = g1 & g2
+    assert result.dtype == "int16"
+
+
+def test_int16_or():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("int16")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("int16")
+    result = g1 | g2
+    assert result.dtype == "int16"
+
+
+def test_int16_xor():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("int16")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("int16")
+    result = g1 ^ g2
+    assert result.dtype == "int16"
+
+
+def test_int16_rshift():
+    g = grid(np.array([[4, 8], [16, 32]])).type("int16")
+    result = g >> 1
+    assert result.dtype == "int16"
+
+
+def test_int16_lshift():
+    g = grid(np.array([[4, 8], [16, 32]])).type("int16")
+    result = g << 1
+    assert result.dtype == "int16"
+
+
+def test_int16_neg():
+    g = grid(np.array([[0, 1], [2, 3]])).type("int16")
+    result = -g
+    assert result.dtype == "float32"
+
+
+def test_int16_pos():
+    g = grid(np.array([[0, 1], [2, 3]])).type("int16")
+    result = +g
+    assert result.dtype == "float32"
+
+
+def test_int16_invert():
+    g = grid(np.array([[1, 0], [1, 0]])).type("int16")
+    result = ~g
+    assert result.dtype == "bool"
+
+
+def test_int32_and():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("int32")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("int32")
+    result = g1 & g2
+    assert result.dtype == "int32"
+
+
+def test_int32_or():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("int32")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("int32")
+    result = g1 | g2
+    assert result.dtype == "int32"
+
+
+def test_int32_xor():
+    g1 = grid(np.array([[1, 0], [1, 0]])).type("int32")
+    g2 = grid(np.array([[1, 1], [0, 0]])).type("int32")
+    result = g1 ^ g2
+    assert result.dtype == "int32"
+
+
+def test_int32_rshift():
+    g = grid(np.array([[4, 8], [16, 32]])).type("int32")
+    result = g >> 1
+    assert result.dtype == "int32"
+
+
+def test_int32_lshift():
+    g = grid(np.array([[4, 8], [16, 32]])).type("int32")
+    result = g << 1
+    assert result.dtype == "int32"
+
+
+def test_int32_neg():
+    g = grid(np.array([[0, 1], [2, 3]])).type("int32")
+    result = -g
+    assert result.dtype == "float32"
+
+
+def test_int32_pos():
+    g = grid(np.array([[0, 1], [2, 3]])).type("int32")
+    result = +g
+    assert result.dtype == "float32"
+
+
+def test_int32_invert():
+    g = grid(np.array([[1, 0], [1, 0]])).type("int32")
+    result = ~g
+    assert result.dtype == "bool"
