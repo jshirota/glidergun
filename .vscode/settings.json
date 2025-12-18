@@ -1,6 +1,5 @@
 {
     "python.analysis.typeCheckingMode": "standard",
-    "python.defaultInterpreterPath": "${workspaceFolder}/${env:OS:Windows_NT/.venv\\Scripts\\python.exe/.venv/bin/python}",
     "python.testing.pytestArgs": [
         "tests"
     ],

@@ -1,16 +1,12 @@
 import logging
-import os
 from dataclasses import dataclass
-from functools import lru_cache
-from typing import IO, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from rasterio.crs import CRS
-from scipy.cluster.hierarchy import DisjointSet
 
+from glidergun._geojson import FeatureCollection
 from glidergun._grid import Grid, con, grid, standardize
-from glidergun._types import FeatureCollection
-from glidergun._utils import get_geojson, save_geojson
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +24,10 @@ class SamResult:
         return grid(polygons, self.source.extent, self.source.crs, self.source.cell_size) == 1
 
     def highlight(self, *labels: str) -> "Stack":
-        return self.source.each(lambda g: con(self.mask(*labels), g, g / 5)).type("uint8", 0)
+        return self.source.each(lambda _, g: con(self.mask(*labels), g, g / 5)).type("uint8", 0)
 
-    def to_geojson(self, crs: int | str | CRS | None = 4326, smooth_factor: float = 0.0) -> FeatureCollection:
-        return get_geojson(
-            (mask.to_polygon(crs, smooth_factor), {"label": mask.label, "score": mask.score}) for mask in self.masks
-        )
-
-    def save_geojson(self, file: str | IO[str], crs: int | str | CRS | None = 4326, smooth_factor: float = 0.0):
-        save_geojson(self.to_geojson(crs, smooth_factor), file)
+    def to_geojson(self):
+        return FeatureCollection((m.to_polygon(4326), {"label": m.label, "score": m.score}) for m in self.masks)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,27 +36,37 @@ class SamMask:
     score: float
     mask: Grid
 
-    def to_polygon(self, crs: int | str | CRS | None = None, smooth_factor: float = 0.0):
+    def to_polygon(self, crs: int | str | CRS | None = None):
         g = self.mask.set_nan(0)
         if crs:
             g = g.project(crs)
-        polygons = [polygon for polygon, value in g.to_polygons(smooth_factor=smooth_factor) if value == 1]
+        polygons = [polygon for polygon, value in g.to_polygons() if value == 1]
         return max(polygons, key=lambda p: p.area)
 
 
 @dataclass(frozen=True)
 class Sam:
-    def sam3(self, *prompt: str, model=None, confidence_threshold: float = 0.5, tile_size: int = 500):
+    def sam(
+        self,
+        *prompt: str,
+        checkpoint_path: str | None = None,
+        hf_token: str | None = None,
+        confidence_threshold: float = 0.5,
+        tile_size: int = 1024,
+    ):
         """Run Segment Anything Model 3 (SAM 3) over the stack with text prompts.
 
         Args:
             prompt: One or more text prompts used for segmentation.
-            model: Optional pre-built SAM 3 model; built and cached if None.
+            checkpoint_path: Optional path to a pre-trained SAM 3 checkpoint.
+            hf_token: Optional Hugging Face token.
             confidence_threshold: Minimum confidence to accept a predicted mask.
 
         Returns:
             SamResult: Collection of masks and an overview visualization stack.
         """
+        from scipy.cluster.hierarchy import DisjointSet
+
         self = cast("Stack", self)
 
         buffer = 0.1
@@ -78,7 +79,12 @@ class Sam:
         for i, tile in enumerate(tiles):
             logger.info(f"Processing tile {i + 1} of {len(tiles)}...")
             all_masks.extend(
-                _execute_sam3(self.clip(tile), *prompt, model=model, confidence_threshold=confidence_threshold)
+                _execute_sam(
+                    self.clip(tile),
+                    *prompt,
+                    checkpoint_or_hf_token=checkpoint_path or hf_token,
+                    confidence_threshold=confidence_threshold,
+                )
             )
 
         n = len(all_masks)
@@ -106,34 +112,17 @@ class Sam:
         return SamResult(masks=masks, source=self)
 
 
-@lru_cache(maxsize=1)
-def _build_sam3():
-    from huggingface_hub import HfFolder, login
-    from sam3.model_builder import build_sam3_image_model
+def _execute_sam(
+    stack: "Stack", *prompt: str, checkpoint_or_hf_token: str | None = None, confidence_threshold: float = 0.5
+):
+    from sam_prompt.model_builder import build_prompt_function
 
-    if not HfFolder.get_token():
-        login()
-
-    bpe_path = os.path.join(os.path.dirname(__file__), "assets", "bpe_simple_vocab_16e6.txt.gz")
-    return build_sam3_image_model(bpe_path=bpe_path)
-
-
-def _execute_sam3(stack: "Stack", *prompt: str, model=None, confidence_threshold: float = 0.5):
-    from sam3.model.sam3_image_processor import Sam3Processor
-    from torch import from_numpy
-
-    if model is None:
-        model = _build_sam3()
-
-    processor = Sam3Processor(model, device=model.device, confidence_threshold=confidence_threshold)  # type: ignore
     rgb = np.stack([g.stretch(0, 255).type("uint8", 0).data for g in stack.grids[:3]], axis=-1)
-    tensor = from_numpy(np.transpose(rgb, (2, 0, 1))).to(model.device)
-    state = processor.set_image(tensor)
+    evaluate = build_prompt_function(rgb, confidence_threshold, checkpoint_or_hf_token)
 
     for label in prompt:
-        output = processor.set_text_prompt(label, state)
-        for m, s in zip(output["masks"].cpu().numpy(), output["scores"].cpu().numpy(), strict=True):
-            g = grid(m[0], extent=stack.extent, crs=stack.crs)
+        for m, s in evaluate(label):
+            g = grid(m, extent=stack.extent, crs=stack.crs)
             yield SamMask(label=label, score=float(s), mask=g.clip(g.set_nan(0).data_extent))
 
 

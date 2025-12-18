@@ -1,6 +1,10 @@
-from typing import Literal, Never, cast, overload
+from typing import Generic, Literal, TypeVar, cast, overload
 
-import planetary_computer as pc
+try:
+    from typing import Never  # type: ignore
+except ImportError:  # Python < 3.11
+    from typing_extensions import Never
+
 import requests
 from pystac.item import Item as PystacItem
 from rasterio.crs import CRS
@@ -26,6 +30,8 @@ class ItemBase(PystacItem):
             raise ValueError(f"Asset '{asset}' not found in item assets: {list(self.assets.keys())}")
         url = self.assets[asset].href
         if self.url == planetary_computer_url:
+            import planetary_computer as pc
+
             return pc.sign(url)
         return url
 
@@ -38,7 +44,11 @@ class ItemBase(PystacItem):
         return s
 
 
-class Item[TGrid: str, TStack: str](ItemBase):
+TGrid = TypeVar("TGrid", bound=str)
+TStack = TypeVar("TStack", bound=str)
+
+
+class Item(ItemBase, Generic[TGrid, TStack]):
     @overload
     def download(self, asset: TGrid) -> Grid: ...
 

@@ -28,7 +28,6 @@ from glidergun._utils import create_directory_for, get_crs, get_driver, get_noda
 
 logger = logging.getLogger(__name__)
 
-
 Operand = Union["Stack", Grid, float, int]
 
 
@@ -62,7 +61,7 @@ class Stack(Sam):
             figure = plt.figure(figsize=figsize, frameon=False)
             axes = figure.add_axes((0, 0, 1, 1))
             axes.axis("off")
-            obj = self.each(_to_uint8_range)
+            obj = self.each(lambda _, g: _to_uint8_range(g))
             rgb = [obj.grids[i - 1].data for i in (self.display if self.display else (1, 2, 3))]
             alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
             plt.imshow(np.dstack([*[np.asanyarray(np.nan_to_num(a, nan=0), "uint8") for a in rgb], alpha]))
@@ -219,30 +218,30 @@ class Stack(Sam):
     __rlshift__ = __rshift__
 
     def __neg__(self):
-        return self.each(lambda g: g.__neg__())
+        return self.each(lambda _, g: g.__neg__())
 
     def __pos__(self):
-        return self.each(lambda g: g.__pos__())
+        return self.each(lambda _, g: g.__pos__())
 
     def __invert__(self):
-        return self.each(lambda g: g.__invert__())
+        return self.each(lambda _, g: g.__invert__())
 
     def _apply(self, n: Operand, op: Callable):
         if isinstance(n, Stack):
             return self.zip_with(n, lambda g1, g2: op(g1, g2))
-        return self.each(lambda g: op(g, n))
+        return self.each(lambda _, g: op(g, n))
 
-    def scale(self, scaler: Scaler, **fit_params):
+    def scale(self, scaler: Scaler | None = None, **fit_params):
         """Scales the stack using the given scaler."""
-        return self.each(lambda g: g.scale(scaler, **fit_params))
+        return self.each(lambda _, g: g.scale(scaler, **fit_params))
 
     def percent_clip(self, min_percent: float, max_percent: float):
         """Clips the stack values to the given percentile range."""
-        return self.each(lambda g: g.percent_clip(min_percent, max_percent))
+        return self.each(lambda _, g: g.percent_clip(min_percent, max_percent))
 
     def stretch(self, min_value: float, max_value: float):
         """Linearly stretch values to `[min_value, max_value]`."""
-        return self.each(lambda g: g.stretch(min_value, max_value))
+        return self.each(lambda _, g: g.stretch(min_value, max_value))
 
     def hist(self, **kwargs) -> Chart:
         """Build a histogram chart of value counts (NaN-aware)."""
@@ -259,21 +258,24 @@ class Stack(Sam):
             raise ValueError("Invalid bands specified.")
         return dataclasses.replace(self, display=rgb)
 
-    def each(self, func: Callable[[Grid], Grid]):
-        """Applies a function to each band and returns a new `Stack`."""
-        return stack(list(map(func, self.grids)))
+    def each(self, func: Callable[[int, Grid], Grid]):
+        """Applies a function (of band number and Grid) and returns a new `Stack`."""
+        return stack([func(i, g) for i, g in enumerate(self.grids, 1)])
 
     def georeference(self, extent: tuple[float, float, float, float] | list[float], crs: int | str | CRS | None = None):
         """Assign extent and CRS to the current data without resampling."""
-        return self.each(lambda g: g.georeference(extent, crs))
+        return self.each(lambda _, g: g.georeference(extent, crs))
+
+    def mosaic(self, *stacks: "Stack", blend: bool = False):
+        return self.each(lambda i, g: g.mosaic(*(s.grids[i - 1] for s in stacks), blend=blend))
 
     def clip(self, extent: tuple[float, float, float, float] | list[float]):
         """Clips the stack to the given extent."""
-        return self.each(lambda g: g.clip(extent))
+        return self.each(lambda _, g: g.clip(extent))
 
     def clip_at(self, x: float, y: float, width: int = 8, height: int = 8):
         """Clips the stack to a window centered at (x, y) with the given width and height."""
-        return self.each(lambda g: g.clip_at(x, y, width, height))
+        return self.each(lambda _, g: g.clip_at(x, y, width, height))
 
     def extract_bands(self, *bands: int):
         """Extracts selected 1-based bands into a new `Stack`."""
@@ -285,15 +287,23 @@ class Stack(Sam):
 
     def project(self, crs: int | str | CRS, resampling: Resampling | ResamplingMethod = "nearest"):
         """Projects the stack to a new coordinate reference system (CRS)."""
-        return self.each(lambda g: g.project(crs, resampling))
+        return self.each(lambda _, g: g.project(crs, resampling))
 
     def resample(self, cell_size: tuple[float, float] | float, resampling: Resampling | ResamplingMethod = "nearest"):
         """Resamples the stack to a new cell size."""
-        return self.each(lambda g: g.resample(cell_size, resampling))
+        return self.each(lambda _, g: g.resample(cell_size, resampling))
 
     def resample_by(self, times: float, resampling: Resampling | ResamplingMethod = "nearest"):
         """Resample by a scaling factor, adjusting cell size accordingly."""
-        return self.each(lambda g: g.resample_by(times, resampling))
+        return self.each(lambda _, g: g.resample_by(times, resampling))
+
+    def gaussian_filter(self, sigma: float = 1.0, **kwargs):
+        """Apply Gaussian filter to the grid."""
+        return self.each(lambda _, g: g.gaussian_filter(sigma=sigma, **kwargs))
+
+    def sobel(self, axis: int = -1, **kwargs):
+        """Apply Sobel filter to the grid."""
+        return self.each(lambda _, g: g.sobel(axis=axis, **kwargs))
 
     def zip_with(self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid]):
         """Combines two stacks by applying a function to corresponding bands."""
@@ -309,7 +319,7 @@ class Stack(Sam):
 
     def type(self, dtype: DataType, nan_to_num: float | None = None):
         """Converts the stack to the given data type, optionally replacing NaNs."""
-        return self.each(lambda g: g.type(dtype, nan_to_num))
+        return self.each(lambda _, g: g.type(dtype, nan_to_num))
 
     def to_bytes(self, dtype: DataType | None = None, driver: str = "") -> bytes:
         """Serializes the stack to bytes (COG by default)."""
@@ -335,7 +345,7 @@ class Stack(Sam):
             or file.lower().endswith(".kmz")
             or file.lower().endswith(".png")
         ):
-            grids = self.extract_bands(*self.display).each(_to_uint8_range).grids
+            grids = self.extract_bands(*self.display).each(lambda _, g: _to_uint8_range(g)).grids
             dtype = "uint8"
         else:
             grids = self.grids
@@ -595,11 +605,12 @@ def from_tile_service(
             response.raise_for_status()
             with MemoryFile(response.content) as memory_file:
                 s = stack(memory_file).type("float32")
-            r, g, b = s.georeference((xmin, ymin, xmax, ymax), 4326).grids
+            cell_size_y = (ymax - ymin) / s.height / 2
+            r, g, b = s.georeference((xmin, ymin - cell_size_y, xmax, ymax), 4326).grids
             logger.info(f"Processing tile {i + 1} of {len(tiles)}...")
-            r_mosaic = r.mosaic(r_mosaic) if r_mosaic else r
-            g_mosaic = g.mosaic(g_mosaic) if g_mosaic else g
-            b_mosaic = b.mosaic(b_mosaic) if b_mosaic else b
+            r_mosaic = r_mosaic.mosaic(r) if r_mosaic else r
+            g_mosaic = g_mosaic.mosaic(g) if g_mosaic else g
+            b_mosaic = b_mosaic.mosaic(b) if b_mosaic else b
         except Exception:
             if max_zoom < 18:
                 raise
