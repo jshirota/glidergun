@@ -1,16 +1,10 @@
-import json
 import re
-from collections.abc import Iterable
 from pathlib import Path
-from typing import IO
 
 import numpy as np
 from numpy import ndarray
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
-from shapely.geometry import Point, Polygon, mapping
-
-from glidergun._types import FeatureCollection
 
 
 def create_directory_for(file_path: str):
@@ -49,19 +43,3 @@ def get_nodata_value(dtype: str) -> float | int | None:
     if dtype.startswith("uint"):
         return np.iinfo(dtype).max
     return np.iinfo(dtype).min
-
-
-def get_geojson(features: Iterable[tuple[Point | Polygon, dict]]) -> FeatureCollection:
-    return FeatureCollection(
-        type="FeatureCollection",
-        features=[{"type": "Feature", "geometry": mapping(g), "properties": p} for g, p in features],
-    )
-
-
-def save_geojson(feature_collection: FeatureCollection, file: str | IO[str]):
-    if isinstance(file, str):
-        create_directory_for(file)
-        with open(file, "w") as f:
-            json.dump(feature_collection, f)
-    else:
-        json.dump(feature_collection, file)

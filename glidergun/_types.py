@@ -1,13 +1,13 @@
 import io
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, NamedTuple, Protocol, TypedDict
+from typing import NamedTuple, Protocol
 
+import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from numpy import ndarray
-from pyparsing import Any
 from rasterio.crs import CRS
 from rasterio.transform import Affine
 from rasterio.warp import transform
@@ -64,18 +64,16 @@ class Extent(NamedTuple):
         return Extent(xmin, ymin, xmax, ymax)
 
     def tiles(self, width: float, height: float):
-        extents: list[Extent] = []
-        xmin = self.xmin
-        while xmin < self.xmax:
-            xmax = xmin + width
-            ymin = self.ymin
-            while ymin < self.ymax:
-                ymax = ymin + height
-                extent = Extent(xmin, ymin, xmax, ymax) & self
+        x_edges = np.arange(self.xmin, self.xmax, width)
+        y_edges = np.arange(self.ymin, self.ymax, height)
+        x_max_edges = x_edges + width
+        y_max_edges = y_edges + height
+        extents = []
+        for xmin, xmax in zip(x_edges, x_max_edges, strict=False):
+            for ymin, ymax in zip(y_edges, y_max_edges, strict=False):
+                extent = Extent(float(xmin), float(ymin), float(xmax), float(ymax)) & self
                 if extent.is_valid:
                     extents.append(extent)
-                ymin = ymax
-            xmin = xmax
         return extents
 
     def adjust(self, xmin: float = 0.0, ymin: float = 0.0, xmax: float = 0.0, ymax: float = 0.0):
@@ -115,17 +113,6 @@ class CellSize(NamedTuple):
 
     def __repr__(self):
         return show(self)
-
-
-class Feature(TypedDict):
-    type: Literal["Feature"]
-    geometry: dict[str, Any]
-    properties: dict[str, Any]
-
-
-class FeatureCollection(TypedDict):
-    type: Literal["FeatureCollection"]
-    features: list[Feature]
 
 
 class PointValue(NamedTuple):

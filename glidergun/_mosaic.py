@@ -26,7 +26,7 @@ class Profile:
 
 
 class Mosaic:
-    def __init__(self, *files: str) -> None:
+    def __init__(self, *files: str, blend: bool = False) -> None:
         assert files, "No files provided"
         profiles = list(self._read_profiles(*files))
         count_set = {p.count for _, p in profiles}
@@ -35,6 +35,7 @@ class Mosaic:
         assert len(crs_set) == 1, "Inconsistent CRS"
         self.crs = crs_set.pop()
         self.files: dict[str, Extent] = {f: Extent(*array_bounds(p.height, p.width, p.transform)) for f, p in profiles}
+        self.blend = blend
         self.extent = Extent(
             min(e.xmin for e in self.files.values()),
             min(e.ymin for e in self.files.values()),
@@ -87,24 +88,29 @@ class Mosaic:
     def clip(self, extent: tuple[float, float, float, float] | list[float], index: tuple[int, ...]) -> Stack | None: ...
 
     def clip(self, extent: tuple[float, float, float, float] | list[float], index=None):
-        if not index or isinstance(index, int):
-            grids: list[Grid] = [g for g in self._read(extent, index or 1) if g]
-            if grids:
-                return mosaic(*grids)
+        try:
+            if not index or isinstance(index, int):
+                return mosaic(*(g for g in self._read(extent, index or 1) if g), blend=self.blend)
+            return stack(*(self.clip(extent, index=i) for i in index))
+        except Exception as ex:
+            logger.warning(f"Failed to clip mosaic for extent {extent} and index {index}: {ex}")
             return None
-        return stack(*(self.clip(extent, index=i) for i in index))
 
 
 @overload
-def mosaic(*grids: str) -> Mosaic: ...
+def mosaic(*items: str, blend: bool = False) -> Mosaic: ...
 
 
 @overload
-def mosaic(*grids: Grid) -> Grid: ...
+def mosaic(*items: Grid, blend: bool = False) -> Grid: ...
 
 
-def mosaic(*grids):
-    g = grids[0]
+@overload
+def mosaic(*items: Stack, blend: bool = False) -> Stack: ...
+
+
+def mosaic(*items, blend: bool = False):
+    g = items[0]
     if isinstance(g, str):
-        return Mosaic(*grids)
-    return g.mosaic(*grids[1:])
+        return Mosaic(*items, blend=blend)
+    return g.mosaic(*items[1:], blend=blend)

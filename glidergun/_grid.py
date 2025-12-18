@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from io import BytesIO
 from types import FunctionType
-from typing import IO, Any, Literal, Union, cast, overload
+from typing import Any, Literal, Union, cast, overload
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,26 +23,15 @@ from rasterio.io import MemoryFile
 from rasterio.transform import Affine
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 from rasterio.windows import Window, from_bounds
-from scipy.ndimage import distance_transform_edt, gaussian_filter, sobel
 from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
 
 from glidergun._focal import Focal
+from glidergun._geojson import FeatureCollection
 from glidergun._interpolation import Interpolation
 from glidergun._literals import ColorMap, DataType, ExtentResolution, ResamplingMethod
 from glidergun._types import CellSize, Chart, Extent, GridCore, PointValue, Scaler
-from glidergun._utils import (
-    create_directory_for,
-    format_type,
-    get_crs,
-    get_driver,
-    get_geojson,
-    get_nodata_value,
-    save_geojson,
-)
+from glidergun._utils import create_directory_for, format_type, get_crs, get_driver, get_nodata_value
 from glidergun._zonal import Zonal
 
 logger = logging.getLogger(__name__)
@@ -317,13 +306,30 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         data = func if isinstance(func, ndarray) else func(self.data)
         return grid(data, self.transform, self.crs)
 
-    def mosaic(self, *grids: "Grid"):
-        """Union multiple grids onto this grid's canvas, respecting NaNs."""
+    def mosaic(self, *grids: "Grid", blend: bool = False):
+        """Create a mosaic of multiple grids blending overlaps."""
         grids_adjusted = standardize(self, *grids, extent="union")
         result = grids_adjusted[0]
         for g in grids_adjusted[1:]:
-            result = con(result.is_nan(), g, result)
+            if not blend:
+                result = con(result.is_nan(), g, result)
+                continue
+            i = ~result.is_nan() & ~g.is_nan()
+            if not i.max:
+                result = con(result.is_nan(), g, result)
+                continue
+            g = result.calibrate(g)
+            dx, dy = result.set_nan(i).distance(), g.set_nan(i).distance()
+            d = dx + dy
+            result = con(i, result * (dy / d) + g * (dx / d), con(result.is_nan(), g, result))
         return result
+
+    def calibrate(self, other: "Grid"):
+        """Calibrate another grid to this grid's mean and standard deviation."""
+        g1, g2 = standardize(self, other)
+        xor = g1.is_nan() | g2.is_nan()
+        g1, g2 = g1.set_nan(xor), g2.set_nan(xor)
+        return other * (g1.std / g2.std) + g1.mean - g2.mean * (g1.std / g2.std)
 
     def standardize(self, *grids: "Grid"):
         """Standardize multiple grids to this grid's extent and cell size."""
@@ -494,14 +500,20 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 
     def gaussian_filter(self, sigma: float = 1.0, **kwargs):
         """Apply Gaussian filter to the grid."""
+        from scipy.ndimage import gaussian_filter
+
         return self.local(lambda a: gaussian_filter(a, sigma=sigma, **kwargs))
 
     def sobel(self, axis: int = -1, **kwargs):
         """Apply Sobel filter to the grid."""
+        from scipy.ndimage import sobel
+
         return self.local(lambda a: sobel(a, axis=axis, **kwargs))
 
     def distance(self):
         """Euclidean distance from cells with positive values."""
+        from scipy.ndimage import distance_transform_edt
+
         g = self.con(self.is_nan(), 0.0)
         x, y = g.cell_size
         cell_size = min(x, y)
@@ -676,31 +688,29 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         """Convert cells to `(x,y,value)` points; optionally include NaNs."""
         return [PointValue(float(x), float(y), float(v)) for x, y, v in self._coords_with_values(include_nan)]
 
-    def to_polygons(self, include_nan: bool = False, smooth_factor: float = 0.0) -> list[tuple[Polygon, float]]:
+    def to_polygons(self, include_nan: bool = False) -> list[tuple[Polygon, float]]:
         """Polygonize regions of constant values; optionally include NaNs and smooth."""
         g = self * 1
         mask = None if include_nan else np.isfinite(g.data)
-        buffer = min(g.cell_size) * smooth_factor
         results = []
         for shape, value in features.shapes(g.data, mask=mask, transform=g.transform):
             polygon = Polygon(shape["coordinates"][0], shape["coordinates"][1:])
-            if buffer > 0:
-                polygon = polygon.buffer(-buffer).buffer(buffer)
             results.append((polygon, float(value)))
         return results
 
-    def to_geojson(self, polygonize: bool = False, include_nan: bool = False, smooth_factor: float = 0.0):
+    @overload
+    def to_geojson(self, polygonize: Literal[True], include_nan: bool = False) -> FeatureCollection[Polygon]: ...
+
+    @overload
+    def to_geojson(self, polygonize: Literal[False], include_nan: bool = False) -> FeatureCollection[Point]: ...
+
+    def to_geojson(self, polygonize: bool, include_nan: bool = False):  # type: ignore
         """Export points or polygons as a GeoJSON FeatureCollection."""
         if polygonize:
-            features = self.to_polygons(include_nan=include_nan, smooth_factor=smooth_factor)
+            features = self.to_polygons(include_nan=include_nan)
         else:
             features = [(Point(x, y), value) for x, y, value in self.to_points(include_nan=include_nan)]
-        return get_geojson((shape, {"value": None if np.isnan(value) else value}) for shape, value in features)
-
-    def save_geojson(
-        self, file: str | IO[str], polygonize: bool = False, include_nan: bool = False, smooth_factor: float = 0.0
-    ):
-        save_geojson(self.to_geojson(polygonize, include_nan, smooth_factor), file)
+        return FeatureCollection((shape, {"value": None if np.isnan(value) else value}) for shape, value in features)
 
     def rasterize(
         self,
@@ -798,15 +808,20 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 
     def kmeans_cluster(self, n_clusters: int, nodata: float = 0.0, **kwargs):
         """Cluster cell values via KMeans and return cluster-center grid."""
+        from sklearn.cluster import KMeans
+
         g = self.is_nan().then(nodata, self)
         kmeans = KMeans(n_clusters=n_clusters, **kwargs).fit(g.data.reshape(-1, 1))
         data = kmeans.cluster_centers_[kmeans.labels_].reshape(self.data.shape)
         result = self.local(data)
         return result.set_nan(self.is_nan())
 
-    def scale(self, scaler: Scaler, **fit_params):
+    def scale(self, scaler: Scaler | None = None, **fit_params):
         """Apply a scaler's `fit_transform` across the grid."""
-        self = cast("Grid", self)
+        from sklearn.preprocessing import StandardScaler
+
+        if scaler is None:
+            scaler = StandardScaler()
         return self.local(lambda a: scaler.fit_transform(a, **fit_params))
 
     def hist(self, **kwargs) -> Chart:
@@ -1427,6 +1442,9 @@ def idw(
 
 def pca(n_components: int = 1, *grids: Grid) -> tuple[Grid, ...]:
     """Performs principal component analysis (PCA) on input grids."""
+    from sklearn.decomposition import PCA
+    from sklearn.preprocessing import StandardScaler
+
     arrays = [g.data for g in standardize(*grids)]
     h, w = arrays[0].shape
     x = np.stack([a.reshape(-1) for a in arrays], axis=1)
