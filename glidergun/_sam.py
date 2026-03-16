@@ -1,29 +1,26 @@
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from rasterio.crs import CRS
 
 from glidergun._geojson import FeatureCollection
 from glidergun._grid import Grid, con, grid, standardize
+from glidergun._stack import Stack
 
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from glidergun._stack import Stack
 
 
 @dataclass(frozen=True, repr=False, slots=True)
 class SamResult:
     masks: list["SamMask"]
-    source: "Stack"
+    source: Stack
 
     def mask(self, *labels: str) -> Grid:
         polygons = [(mask.to_polygon(), 1) for mask in self.masks if not labels or mask.label in labels]
         return grid(polygons, self.source.extent, self.source.crs, self.source.cell_size) == 1
 
-    def highlight(self, *labels: str) -> "Stack":
+    def highlight(self, *labels: str) -> Stack:
         return self.source.each(lambda _, g: con(self.mask(*labels), g, g / 5)).type("uint8", 0)
 
     def to_geojson(self):
@@ -44,76 +41,72 @@ class SamMask:
         return max(polygons, key=lambda p: p.area)
 
 
-@dataclass(frozen=True)
-class Sam:
-    def sam(
-        self,
-        *prompt: str,
-        checkpoint_path: str | None = None,
-        hf_token: str | None = None,
-        confidence_threshold: float = 0.5,
-        tile_size: int = 1024,
-    ):
-        """Run Segment Anything Model 3 (SAM 3) over the stack with text prompts.
+def sam(
+    stack: Stack,
+    *prompt: str,
+    checkpoint_path: str | None = None,
+    hf_token: str | None = None,
+    confidence_threshold: float = 0.5,
+    tile_size: int = 1024,
+):
+    """Run Segment Anything Model 3 (SAM 3) over the stack with text prompts.
 
-        Args:
-            prompt: One or more text prompts used for segmentation.
-            checkpoint_path: Optional path to a pre-trained SAM 3 checkpoint.
-            hf_token: Optional Hugging Face token.
-            confidence_threshold: Minimum confidence to accept a predicted mask.
+    Args:
+        prompt: One or more text prompts used for segmentation.
+        checkpoint_path: Optional path to a pre-trained SAM 3 checkpoint.
+        hf_token: Optional Hugging Face token.
+        confidence_threshold: Minimum confidence to accept a predicted mask.
 
-        Returns:
-            SamResult: Collection of masks and an overview visualization stack.
-        """
-        from scipy.cluster.hierarchy import DisjointSet
+    Returns:
+        SamResult: Collection of masks and an overview visualization stack.
+    """
+    from scipy.cluster.hierarchy import DisjointSet
 
-        self = cast("Stack", self)
+    buffer = 0.1
+    ios_threshold = 0.5
 
-        buffer = 0.1
-        ios_threshold = 0.5
+    w, h = stack.cell_size * tile_size
+    tiles = [e.adjust(-w * buffer, -h * buffer, w * buffer, h * buffer) for e in stack.extent.tiles(w, h)]
 
-        w, h = self.cell_size * tile_size
-        tiles = [e.adjust(-w * buffer, -h * buffer, w * buffer, h * buffer) for e in self.extent.tiles(w, h)]
-
-        all_masks: list[SamMask] = []
-        for i, tile in enumerate(tiles):
-            logger.info(f"Processing tile {i + 1} of {len(tiles)}...")
-            all_masks.extend(
-                _execute_sam(
-                    self.clip(tile),
-                    *prompt,
-                    checkpoint_or_hf_token=checkpoint_path or hf_token,
-                    confidence_threshold=confidence_threshold,
-                )
+    all_masks: list[SamMask] = []
+    for i, tile in enumerate(tiles):
+        logger.info(f"Processing tile {i + 1} of {len(tiles)}...")
+        all_masks.extend(
+            _execute_sam(
+                stack.clip(tile),
+                *prompt,
+                checkpoint_or_hf_token=checkpoint_path or hf_token,
+                confidence_threshold=confidence_threshold,
             )
+        )
 
-        n = len(all_masks)
-        ds = DisjointSet(range(n))
-        for i, m in enumerate(all_masks):
-            for j in range(i + 1, n):
-                if _same_object(m, all_masks[j], ios_threshold):
-                    ds.merge(i, j)
+    n = len(all_masks)
+    ds = DisjointSet(range(n))
+    for i, m in enumerate(all_masks):
+        for j in range(i + 1, n):
+            if _same_object(m, all_masks[j], ios_threshold):
+                ds.merge(i, j)
 
-        groups = {}
-        for i in range(n):
-            groups.setdefault(ds[i], []).append(all_masks[i])
+    groups = {}
+    for i in range(n):
+        groups.setdefault(ds[i], []).append(all_masks[i])
 
-        masks = []
-        for grouped in groups.values():
-            first = grouped[0]
-            if len(grouped) == 1:
-                masks.append(first)
-            else:
-                label = first.label
-                score = max(m.score for m in grouped)
-                mask = sum(standardize(*[m.mask for m in grouped], extent="union")) > 0
-                masks.append(SamMask(label=label, score=score, mask=mask))  # type: ignore
+    masks = []
+    for grouped in groups.values():
+        first = grouped[0]
+        if len(grouped) == 1:
+            masks.append(first)
+        else:
+            label = first.label
+            score = max(m.score for m in grouped)
+            mask = sum(standardize(*[m.mask for m in grouped], extent="union")) > 0
+            masks.append(SamMask(label=label, score=score, mask=mask))  # type: ignore
 
-        return SamResult(masks=masks, source=self)
+    return SamResult(masks=masks, source=stack)
 
 
 def _execute_sam(
-    stack: "Stack", *prompt: str, checkpoint_or_hf_token: str | None = None, confidence_threshold: float = 0.5
+    stack: Stack, *prompt: str, checkpoint_or_hf_token: str | None = None, confidence_threshold: float = 0.5
 ):
     from sam_prompt.model_builder import build_prompt_function
 

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from io import BytesIO
 from types import FunctionType
-from typing import Any, Literal, Union, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, Union, cast, overload
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,6 +33,9 @@ from glidergun._literals import ColorMap, DataType, ExtentResolution, Resampling
 from glidergun._types import CellSize, Chart, Extent, GridCore, PointValue, Scaler
 from glidergun._utils import create_directory_for, format_type, get_crs, get_driver, get_nodata_value
 from glidergun._zonal import Zonal
+
+if TYPE_CHECKING:
+    from glidergun._stac import Stack
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +78,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
             figure = plt.figure(figsize=figsize, frameon=False)
             axes = figure.add_axes((0, 0, 1, 1))
             axes.axis("off")
-            obj = _to_uint8_range(self)
+            obj = _to_uint8_range(self.resample(max(self.cell_size)))
             plt.imshow(obj.data, cmap=self.display)
             plt.savefig(buffer, bbox_inches="tight", pad_inches=0)
             plt.close(figure)
@@ -83,7 +86,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 
     @cached_property
     def img(self) -> str:
-        image = b64encode(self._thumbnail()).decode()
+        image = b64encode(self._thumbnail((5, 5))).decode()
         return f"data:image/png;base64, {image}"
 
     @cached_property
@@ -380,6 +383,12 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         """Assign extent and CRS to the current data without resampling."""
         return grid(self.data, extent, get_crs(crs) if crs else self.crs)
 
+    def georeference_to(self, reference: "Grid | Stack"):
+        """Automatically georeference to a reference grid or stack using scan + LoFTR."""
+        from glidergun._georeferencing import georeference_to_reference
+
+        return georeference_to_reference(self, reference)
+
     def _reproject(
         self,
         transform,
@@ -644,6 +653,27 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         assert result
         return result
 
+    @overload
+    def overlay(self, other: "Grid", alpha: float = 1.0) -> "Grid": ...
+
+    @overload
+    def overlay(self, other: "Stack", alpha: float = 1.0) -> "Stack": ...
+
+    def overlay(self, other: "Grid | Stack", alpha: float = 1.0):
+        """Overlays another grid or stack on top of the current grid with alpha blending."""
+        if isinstance(other, Grid):
+            g1, g2 = standardize(self, other, extent="first")
+            return con(g2.is_nan(), g1, g1 * (1 - alpha) + g2 * alpha)
+
+        return self.to_stack().overlay(other, alpha)
+
+    def draw(self, shape: BaseGeometry, value: float | None):
+        """Draws a shape on the grid with the given value."""
+        if value is None or value is np.nan:
+            nodata_value: float = get_nodata_value("float32")  # type: ignore
+            return self.draw(shape, nodata_value).set_nan(nodata_value)
+        return self.overlay(grid([(shape, value)], self.extent, self.crs, self.cell_size))
+
     def value_at(self, x: float, y: float) -> float:
         """Return the cell value at map coordinate `(x,y)` or NaN if out-of-bounds."""
         c = int((x - self.xmin) / self.cell_size.x)
@@ -847,6 +877,36 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         with MemoryFile() as memory_file:
             self.save(memory_file, dtype, driver)
             return memory_file.read()
+
+    def sam(
+        self,
+        *prompt: str,
+        checkpoint_path: str | None = None,
+        hf_token: str | None = None,
+        confidence_threshold: float = 0.5,
+        tile_size: int = 1024,
+    ):
+        """Run Segment Anything Model 3 (SAM 3) over the stack with text prompts.
+
+        Args:
+            prompt: One or more text prompts used for segmentation.
+            checkpoint_path: Optional path to a pre-trained SAM 3 checkpoint.
+            hf_token: Optional Hugging Face token.
+            confidence_threshold: Minimum confidence to accept a predicted mask.
+
+        Returns:
+            SamResult: Collection of masks and an overview visualization stack.
+        """
+        from glidergun._sam import sam
+
+        return sam(
+            self.to_stack(),
+            *prompt,
+            checkpoint_path=checkpoint_path,
+            hf_token=hf_token,
+            confidence_threshold=confidence_threshold,
+            tile_size=tile_size,
+        )
 
     def save(self, file: str | MemoryFile, dtype: DataType | None = None, driver: str = ""):
         """Saves the grid to disk or a `MemoryFile`.
@@ -1159,10 +1219,11 @@ def grid(
                 with data.open() as dataset:
                     return from_dataset(dataset, extent, crs, cell_size, index)  # type: ignore
             case ndarray():
-                return from_ndarray(data, extent or (0, 0, 1, 1), crs or 4326)
+                w, h = data.shape[1], data.shape[0]
+                return from_ndarray(data, extent or (0, 0, w / 1000, h / 1000), crs or 4326)
             case w, h if isinstance(w, int) and isinstance(h, int):
                 data = np.arange(w * h).reshape(h, w)
-                return from_ndarray(data, extent or (0, 0, 1, 1), crs or 4326)
+                return from_ndarray(data, extent or (0, 0, w / 1000, h / 1000), crs or 4326)
             case _:
                 assert extent, "Extent is required."
                 assert cell_size, "Cell size is required."

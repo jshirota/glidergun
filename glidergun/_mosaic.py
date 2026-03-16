@@ -91,7 +91,7 @@ class Mosaic:
         try:
             if not index or isinstance(index, int):
                 return mosaic(*(g for g in self._read(extent, index or 1) if g), blend=self.blend)
-            return stack(*(self.clip(extent, index=i) for i in index))
+            return stack([self.clip(extent, index=i) for i in index])
         except Exception as ex:
             logger.warning(f"Failed to clip mosaic for extent {extent} and index {index}: {ex}")
             return None

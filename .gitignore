@@ -6,7 +6,7 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
+.torch
 .venv
 
 tests/output/

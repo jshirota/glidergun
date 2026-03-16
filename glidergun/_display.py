@@ -22,13 +22,13 @@ def get_html(obj: Grid | Stack | ArtistAnimation | SamResult):
 
 
 def animate(
-    grids: Iterable[Grid],
+    grids: Iterable[Grid | Stack],
     cmap: ColorMap | Any = "gray",
-    interval: int = 100,
+    interval: int = 200,
 ):
     first = next(iter(grids))
-    n = 5 / first.width
-    figsize = (first.width * n, first.height * n)
+    n = 5 / first.extent.width
+    figsize = (first.extent.width * n, first.extent.height * n)
 
     def iterate():
         yield first
@@ -37,7 +37,10 @@ def animate(
     figure = plt.figure(figsize=figsize, frameon=False)
     axes = figure.add_axes((0, 0, 1, 1))
     axes.axis("off")
-    frames = [[plt.imshow(g.data, cmap=cmap, animated=True)] for g in iterate()]
+    frames = [
+        [axes.imshow(o.to_array() if isinstance(o, Stack) else o.data, cmap=cmap, animated=True, aspect="auto")]
+        for o in iterate()
+    ]
     plt.close()
     return ArtistAnimation(figure, frames, interval=interval, blit=True)
 

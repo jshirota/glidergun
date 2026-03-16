@@ -1,7 +1,10 @@
+import hashlib
+import os
 import re
 from pathlib import Path
 
 import numpy as np
+import requests
 from numpy import ndarray
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension
@@ -43,3 +46,26 @@ def get_nodata_value(dtype: str) -> float | int | None:
     if dtype.startswith("uint"):
         return np.iinfo(dtype).max
     return np.iinfo(dtype).min
+
+
+def http_get(url: str, cache_dir: str | None = None) -> bytes:
+    if not cache_dir:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.content
+
+    key = hashlib.md5(url.encode()).hexdigest()
+    path = f"{cache_dir}/{key}"
+
+    if os.path.exists(path):
+        with open(path, "rb") as f:
+            return f.read()
+
+    response = requests.get(url)
+    response.raise_for_status()
+    os.makedirs(cache_dir, exist_ok=True)
+
+    with open(path, "wb") as f:
+        f.write(response.content)
+
+    return response.content

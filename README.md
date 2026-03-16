@@ -25,7 +25,7 @@ hillshade
 ### With Segment Anything Model (larger dependency download)
 
 ```bash
-pip install glidergun[sam]
+pip install glidergun[torch]
 ```
 
 ```python

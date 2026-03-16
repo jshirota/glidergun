@@ -11,6 +11,7 @@ from numpy import ndarray
 from rasterio.crs import CRS
 from rasterio.transform import Affine
 from rasterio.warp import transform
+from shapely import box
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,10 @@ class Extent(NamedTuple):
     @property
     def height(self):
         return self.ymax - self.ymin
+
+    @property
+    def center(self):
+        return (self.xmin + self.xmax) / 2, (self.ymin + self.ymax) / 2
 
     @property
     def is_valid(self):
@@ -84,6 +89,9 @@ class Extent(NamedTuple):
 
     def buffer(self, distance: float):
         return self.adjust(-distance, -distance, distance, distance)
+
+    def to_polygon(self):
+        return box(*self)
 
     def __repr__(self):
         return show(self)

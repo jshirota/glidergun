@@ -11,20 +11,33 @@ from typing import Union, overload
 
 import numpy as np
 import rasterio
-import requests
 from matplotlib import pyplot as plt
 from rasterio import DatasetReader
 from rasterio.crs import CRS
 from rasterio.errors import NotGeoreferencedWarning
 from rasterio.io import MemoryFile
+from rasterio.transform import Affine
 from rasterio.warp import Resampling
+from shapely.geometry.base import BaseGeometry
 
-from glidergun._grid import Extent, Grid, _metadata, _to_uint8_range, con, from_dataset, pca, standardize
-from glidergun._literals import DataType, ResamplingMethod
+from glidergun._grid import (
+    Extent,
+    Grid,
+    _metadata,
+    _to_uint8_range,
+    con,
+    from_dataset,
+    maximum,
+    mean,
+    minimum,
+    pca,
+    standardize,
+    std,
+)
+from glidergun._literals import Basemap, BasemapUrl, DataType, ExtentResolution, ResamplingMethod
 from glidergun._quadkey import get_tiles
-from glidergun._sam import Sam
 from glidergun._types import CellSize, Chart, Scaler
-from glidergun._utils import create_directory_for, get_crs, get_driver, get_nodata_value
+from glidergun._utils import create_directory_for, get_crs, get_driver, get_nodata_value, http_get
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +45,7 @@ Operand = Union["Stack", Grid, float, int]
 
 
 @dataclass(frozen=True)
-class Stack(Sam):
+class Stack:
     """A multi-band raster container.
 
     Wraps a tuple of `Grid` objects representing bands of an image and
@@ -61,7 +74,7 @@ class Stack(Sam):
             figure = plt.figure(figsize=figsize, frameon=False)
             axes = figure.add_axes((0, 0, 1, 1))
             axes.axis("off")
-            obj = self.each(lambda _, g: _to_uint8_range(g))
+            obj = self.each(lambda _, g: _to_uint8_range(g.resample(max(self.cell_size))))
             rgb = [obj.grids[i - 1].data for i in (self.display if self.display else (1, 2, 3))]
             alpha = np.where(np.isfinite(rgb[0] + rgb[1] + rgb[2]), 255, 0)
             plt.imshow(np.dstack([*[np.asanyarray(np.nan_to_num(a, nan=0), "uint8") for a in rgb], alpha]))
@@ -71,48 +84,57 @@ class Stack(Sam):
 
     @cached_property
     def img(self) -> str:
-        image = b64encode(self._thumbnail()).decode()
+        image = b64encode(self._thumbnail((5, 5))).decode()
         return f"data:image/png;base64, {image}"
 
     @property
+    def first(self) -> Grid:
+        """Returns the first grid in the stack."""
+        return self.grids[0]
+
+    @property
+    def transform(self) -> Affine:
+        return self.first.transform
+
+    @property
     def crs(self) -> CRS:
-        return self.grids[0].crs
+        return self.first.crs
 
     @cached_property
     def width(self) -> int:
-        return self.grids[0].width
+        return self.first.width
 
     @cached_property
     def height(self) -> int:
-        return self.grids[0].height
+        return self.first.height
 
     @cached_property
     def dtype(self) -> DataType:
-        return self.grids[0].dtype
+        return self.first.dtype
 
     @property
     def xmin(self) -> float:
-        return self.grids[0].xmin
+        return self.first.xmin
 
     @property
     def ymin(self) -> float:
-        return self.grids[0].ymin
+        return self.first.ymin
 
     @property
     def xmax(self) -> float:
-        return self.grids[0].xmax
+        return self.first.xmax
 
     @property
     def ymax(self) -> float:
-        return self.grids[0].ymax
+        return self.first.ymax
 
     @property
     def extent(self) -> Extent:
-        return self.grids[0].extent
+        return self.first.extent
 
     @property
     def cell_size(self) -> CellSize:
-        return self.grids[0].cell_size
+        return self.first.cell_size
 
     @property
     def sha256s(self) -> tuple[str, ...]:
@@ -262,9 +284,19 @@ class Stack(Sam):
         """Applies a function (of band number and Grid) and returns a new `Stack`."""
         return stack([func(i, g) for i, g in enumerate(self.grids, 1)])
 
+    def local(self, func: Callable[[np.ndarray], np.ndarray] | np.ndarray):
+        """Apply a numpy function to the data for each grid."""
+        return self.each(lambda _, g: g.local(func))
+
     def georeference(self, extent: tuple[float, float, float, float] | list[float], crs: int | str | CRS | None = None):
         """Assign extent and CRS to the current data without resampling."""
         return self.each(lambda _, g: g.georeference(extent, crs))
+
+    def georeference_to(self, reference: "Grid | Stack"):
+        """Automatically georeference to a reference grid or stack using scan + LoFTR."""
+        from glidergun._georeferencing import georeference_to_reference
+
+        return georeference_to_reference(self, reference)
 
     def mosaic(self, *stacks: "Stack", blend: bool = False):
         return self.each(lambda i, g: g.mosaic(*(s.grids[i - 1] for s in stacks), blend=blend))
@@ -281,9 +313,33 @@ class Stack(Sam):
         """Extracts selected 1-based bands into a new `Stack`."""
         return stack([self.grids[i - 1] for i in bands])
 
-    def pca(self, n_components: int = 3):
+    def mean(self):
+        """Calculates the mean across all bands."""
+        return mean(*self.grids)
+
+    def std(self):
+        """Calculates the standard deviation across all bands."""
+        return std(*self.grids)
+
+    def min(self):
+        """Calculates the minimum value across all bands."""
+        return minimum(*self.grids)
+
+    def max(self):
+        """Calculates the maximum value across all bands."""
+        return maximum(*self.grids)
+
+    @overload
+    def pca(self, n_components: int) -> "Stack": ...
+
+    @overload
+    def pca(self) -> Grid: ...
+
+    def pca(self, n_components: int | None = None):
         """Performs Principal Component Analysis (PCA) on the stack bands."""
-        return stack(pca(n_components, *self.grids))
+        if n_components:
+            return stack(pca(n_components, *self.grids))
+        return stack(pca(1, *self.grids)).first
 
     def project(self, crs: int | str | CRS, resampling: Resampling | ResamplingMethod = "nearest"):
         """Projects the stack to a new coordinate reference system (CRS)."""
@@ -305,13 +361,33 @@ class Stack(Sam):
         """Apply Sobel filter to the grid."""
         return self.each(lambda _, g: g.sobel(axis=axis, **kwargs))
 
-    def zip_with(self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid]):
+    def zip_with(
+        self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid], extent: ExtentResolution | Extent = "intersect"
+    ):
         """Combines two stacks by applying a function to corresponding bands."""
         grids = []
         for grid1, grid2 in zip(self.grids, other_stack.grids, strict=False):
-            grid1, grid2 = standardize(grid1, grid2)
+            grid1, grid2 = standardize(grid1, grid2, extent=extent)
             grids.append(func(grid1, grid2))
-        return stack(*grids)
+        return stack(grids)
+
+    def overlay(self, other: "Grid | Stack", alpha: float = 1.0):
+        """Overlays another grid or stack on top of the current stack with alpha blending."""
+        return self.zip_with(
+            other if isinstance(other, Stack) else other.to_stack(),
+            lambda g1, g2: con(g2.is_nan(), g1, g1 * (1 - alpha) + g2 * alpha),
+            extent="first",
+        )
+
+    def draw(self, shape: BaseGeometry, *values: float | None):
+        """Draws a shape on the stack with the given values."""
+        if not values:
+            values = (None,) * len(self.grids)
+        elif len(values) == 1:
+            values = values * len(self.grids)
+        elif len(values) != len(self.grids):
+            raise ValueError("Number of values must match number of bands.")
+        return self.each(lambda i, g: g.draw(shape, values[i - 1]))
 
     def value_at(self, x: float, y: float):
         """Returns the values at the given coordinates for all bands."""
@@ -321,11 +397,44 @@ class Stack(Sam):
         """Converts the stack to the given data type, optionally replacing NaNs."""
         return self.each(lambda _, g: g.type(dtype, nan_to_num))
 
+    def to_array(self):
+        return np.stack([g.data for g in self.grids], axis=-1)
+
     def to_bytes(self, dtype: DataType | None = None, driver: str = "") -> bytes:
         """Serializes the stack to bytes (COG by default)."""
         with MemoryFile() as memory_file:
             self.save(memory_file, dtype, driver)
             return memory_file.read()
+
+    def sam(
+        self,
+        *prompt: str,
+        checkpoint_path: str | None = None,
+        hf_token: str | None = None,
+        confidence_threshold: float = 0.5,
+        tile_size: int = 1024,
+    ):
+        """Run Segment Anything Model 3 (SAM 3) over the stack with text prompts.
+
+        Args:
+            prompt: One or more text prompts used for segmentation.
+            checkpoint_path: Optional path to a pre-trained SAM 3 checkpoint.
+            hf_token: Optional Hugging Face token.
+            confidence_threshold: Minimum confidence to accept a predicted mask.
+
+        Returns:
+            SamResult: Collection of masks and an overview visualization stack.
+        """
+        from glidergun._sam import sam
+
+        return sam(
+            self,
+            *prompt,
+            checkpoint_path=checkpoint_path,
+            hf_token=hf_token,
+            confidence_threshold=confidence_threshold,
+            tile_size=tile_size,
+        )
 
     def save(self, file: str | MemoryFile, dtype: DataType | None = None, driver: str = ""):
         """Saves the stack to disk or a `MemoryFile`.
@@ -366,7 +475,7 @@ class Stack(Sam):
                 count=len(grids),
                 dtype=dtype,
                 nodata=nodata,
-                **_metadata(self.grids[0]),
+                **_metadata(self.first),
             ) as dataset:
                 for index, grid in enumerate(grids):
                     dataset.write(grid.data, index + 1)
@@ -376,7 +485,7 @@ class Stack(Sam):
                 count=len(grids),
                 dtype=dtype,
                 nodata=nodata,
-                **_metadata(self.grids[0]),
+                **_metadata(self.first),
             ) as dataset:
                 for index, grid in enumerate(grids):
                     dataset.write(grid.data, index + 1)
@@ -408,10 +517,10 @@ def stack(
 
 @overload
 def stack(
-    data: str,
+    data: Basemap | str,
     extent: tuple[float, float, float, float] | list[float],
     max_tiles: int = 10,
-    request: Callable[[str], requests.Response] = requests.get,
+    cache_dir: str | None = None,
 ) -> Stack:
     """Creates a new stack from a tile service url template with {x}{y}{z} or {q} placeholders.
 
@@ -419,17 +528,14 @@ def stack(
         data (str): Tile service url template with {x}{y}{z} or {q} placeholders.
         extent (tuple[float, float, float, float] | list[float]): Map extent used to clip the raster.
         max_tiles (int, optional): Maximum number of tiles to load.  Defaults to 10.
+        cache_dir (str | None, optional): Directory to cache downloaded tiles.  Defaults to None (no caching).
 
     Example:
-        >>> stack(
-        ... "https://t.ssl.ak.tiles.virtualearth.net/tiles/a{q}.jpeg?g=15437",
-        ... extent=(-123.164, 49.272, -123.162, 49.273),
-        ... max_tiles=50
-        ... )
-        image: 1491x1143 uint8 | crs: 4326 | count: 3 | rgb: (1, 2, 3)
+        >>> stack("microsoft", (-123.164, 49.272, -123.162, 49.273), max_tiles=10)
+        image: 373x285 uint8 | crs: EPSG:3857 | count: 3 | rgb: (1, 2, 3)
 
     Returns:
-        Stack: A new stack.
+        Stack: A new stack in Web Mercator.
     """
     ...
 
@@ -532,13 +638,16 @@ def stack(  # type: ignore
     extent: tuple[float, float, float, float] | list[float] | None = None,
     crs: int | str | CRS | None = None,
     max_tiles: int | None = None,
-    request: Callable[[str], requests.Response] = requests.get,
+    cache_dir: str | None = None,
 ) -> Stack:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=NotGeoreferencedWarning)
 
-        if isinstance(data, str) and data.startswith("https://") and "{" in data and "}" in data and extent:
-            return from_tile_service(data, extent, max_tiles or 10, request=request)
+        if isinstance(data, str):
+            if data in BasemapUrl:
+                data = BasemapUrl[data]
+            if data.startswith("https://") and "{" in data and "}" in data and extent:
+                return from_tile_service(data, extent, max_tiles or 10, cache_dir=cache_dir)
 
         if isinstance(data, (str, DatasetReader, bytes, MemoryFile)):
             data = [data]
@@ -593,7 +702,7 @@ def from_tile_service(
     extent: tuple[float, float, float, float] | list[float],
     max_tiles: int,
     max_zoom: int = 24,
-    request: Callable[[str], requests.Response] = requests.get,
+    cache_dir: str | None = None,
 ):
     tiles = get_tiles(extent, max_tiles, max_zoom)
     r_mosaic, g_mosaic, b_mosaic = None, None, None
@@ -601,9 +710,8 @@ def from_tile_service(
     for i, (x, y, z, q, xmin, ymin, xmax, ymax) in enumerate(tiles):
         url = url_template.format(x=x, y=y, z=z, q=q)
         try:
-            response = request(url)
-            response.raise_for_status()
-            with MemoryFile(response.content) as memory_file:
+            data = http_get(url, cache_dir=cache_dir)
+            with MemoryFile(data) as memory_file:
                 s = stack(memory_file).type("float32")
             cell_size_y = (ymax - ymin) / s.height / 2
             r, g, b = s.georeference((xmin, ymin - cell_size_y, xmax, ymax), 4326).grids
@@ -614,9 +722,9 @@ def from_tile_service(
         except Exception:
             if max_zoom < 18:
                 raise
-            return from_tile_service(url_template, extent, max_tiles, max_zoom - 1, request)
+            return from_tile_service(url_template, extent, max_tiles, max_zoom - 1, cache_dir=cache_dir)
 
     if r_mosaic and g_mosaic and b_mosaic:
-        return stack([r_mosaic, g_mosaic, b_mosaic]).clip(extent).type("uint8", 0)
+        return stack([r_mosaic, g_mosaic, b_mosaic]).clip(extent).project(3857).type("uint8", 0)
 
     raise ValueError("No data found for the specified extent.")

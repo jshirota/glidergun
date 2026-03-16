@@ -25,7 +25,7 @@ def test_ndarray():
 
 def test_box():
     g = grid((40, 30))
-    assert g.extent == (0, 0, 1, 1)
+    assert g.extent == (0.0, 0.0, 0.04, 0.03)
     assert g.crs == 4326
     assert g.width == 40
     assert g.height == 30

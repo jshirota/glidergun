@@ -1,5 +1,17 @@
 from typing import Literal
 
+Basemap = Literal[
+    "esri",
+    "google",
+    "microsoft",
+]
+
+BasemapUrl: dict[Basemap, str] = {
+    "esri": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    "google": "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+    "microsoft": "https://t.ssl.ak.tiles.virtualearth.net/tiles/a{q}.jpeg?g=0",
+}
+
 ColorMap = Literal[
     "Accent",
     "Accent_r",
