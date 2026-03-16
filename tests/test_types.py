@@ -2,7 +2,7 @@ import numpy as np
 from rasterio.crs import CRS
 from rasterio.transform import Affine
 
-from glidergun._types import CellSize, Extent, GridCore, PointValue
+from glidergun.types import CellSize, Extent, GridCore, PointValue
 
 
 def test_gridcore():

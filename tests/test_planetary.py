@@ -1,6 +1,7 @@
 import shutil
 
 from glidergun import Grid, Stack, search, stack
+from tests.utils import extents_equal
 
 
 def test_sentinel_visual():
@@ -11,14 +12,14 @@ def test_sentinel_visual():
     assert i.datetime
     s = i.download("visual")
     assert len(s.grids) == 3
-    assert s.dtype == "uint8"
+    assert s.dtype == "float32"
 
     s.save("tests/output/temp/sentinel_test.tif")
     s2 = stack("tests/output/temp/sentinel_test.tif")
     assert s2.crs == s.crs
-    assert s2.extent == s.extent
+    assert extents_equal(s2.extent, s.extent)
     assert len(s2.grids) == 3
-    assert s2.dtype == "uint8"
+    assert s2.dtype == "float32"
 
     shutil.rmtree("tests/output/temp")
 
@@ -36,7 +37,7 @@ def test_sentinel_rgb():
     s.save("tests/output/temp/sentinel_rgb.tif")
     s2 = stack("tests/output/temp/sentinel_rgb.tif")
     assert s2.crs == s.crs
-    assert s2.extent == s.extent
+    assert extents_equal(s2.extent, s.extent)
     assert len(s2.grids) == 3
     assert s2.dtype == "float32"
 
@@ -56,7 +57,7 @@ def test_landsat_rgb():
     s.save("tests/output/temp/landsat_rgb.img")
     s2 = stack("tests/output/temp/landsat_rgb.img")
     assert s2.crs == s.crs
-    assert s2.extent == s.extent
+    assert extents_equal(s2.extent, s.extent)
     assert len(s2.grids) == 3
     assert s2.dtype == "float32"
 
@@ -75,7 +76,7 @@ def test_landsat_red():
     g.save("tests/output/temp/landsat_red.bil")
     g2 = stack("tests/output/temp/landsat_red.bil")
     assert g2.crs == g.crs
-    assert g2.extent == g.extent
+    assert extents_equal(g2.extent, g.extent)
     assert g2.dtype == "float32"
 
     shutil.rmtree("tests/output/temp")
@@ -93,3 +94,20 @@ def test_other():
 
     g = i.download("red")
     assert isinstance(g, Grid)
+
+
+def test_preview():
+    e = (-75.62, 45.45, -75.58, 45.47)
+    item = search("landsat-c2-l2", e, datetime="1986-01-01/1987-01-01", cloud_cover_percent=5)[0]
+
+    t = item.datetime
+    assert t
+    assert t.isoformat() <= "1987-01-01"
+    assert t.isoformat() >= "1986-01-01"
+
+    s1 = item.download(["red", "green", "blue"])
+    s2 = item.download(["red", "green", "blue"], preview=False)
+
+    assert s1.crs == s2.crs
+    assert s1.width < s2.width / 2
+    assert s1.height < s2.height / 2

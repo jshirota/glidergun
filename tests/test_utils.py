@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from glidergun import grid
-from glidergun._utils import format_type, get_nodata_value
+from glidergun.utils import format_type, get_nodata_value
 
 
 def test_format_type_float64():
@@ -88,7 +88,7 @@ def test_get_nodata_value_int64():
 
 
 def test_process_tiles():
-    g = grid("tests/input/n55_e008_1arc_v3.bil")
+    g = grid("./data/n55_e008_1arc_v3.bil")
 
     def assert_eq(g2):
         assert g2.sha256 == g.sha256
@@ -100,3 +100,9 @@ def test_process_tiles():
     assert_eq(g.process_tiles(lambda x: x, 678, 7, 2))
     assert_eq(g.process_tiles(lambda x: x, 3456, 0, 1))
     assert_eq(g.process_tiles(lambda x: x, 7891, 19, 1))
+
+
+def test_agg():
+    g = grid("./data/n55_e008_1arc_v3.bil")
+    assert g.img
+    assert g.hist()

@@ -7,9 +7,9 @@ import torch
 from affine import Affine
 from rasterio.transform import from_origin
 
-import glidergun._georeferencing as georeferencing
+import glidergun.loftr as georeferencing
 from glidergun import CellSize, grid
-from glidergun._georeferencing import georeference_to_reference
+from glidergun.loftr import georeference_to_reference
 
 
 def _rotate_image_bound(image: np.ndarray, angle: float) -> np.ndarray:

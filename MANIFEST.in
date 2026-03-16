@@ -1,0 +1,3 @@
+# Exclude tests and notebooks from source distribution
+exclude tests/**
+exclude notebooks/**

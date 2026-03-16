@@ -27,6 +27,9 @@ select = [
 # Ignore specific rules if needed
 ignore = []
 
+[lint.per-file-ignores]
+"*.ipynb" = ["W391"]
+
 # Allow autofix for all enabled rules
 fixable = ["ALL"]
 unfixable = []

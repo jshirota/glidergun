@@ -1,16 +1,23 @@
 import hashlib
 import shutil
-from functools import lru_cache
 
+import pytest
 import rasterio
 
 from glidergun import grid, search
 
-dem = grid("./tests/input/n55_e008_1arc_v3.bil").resample(0.01)
-dem_color = grid("./tests/input/n55_e008_1arc_v3.bil").resample(0.01).color("terrain")
+
+@pytest.fixture(scope="session")
+def dem():
+    return grid("./data/n55_e008_1arc_v3.bil").resample(0.01)
 
 
-@lru_cache
+@pytest.fixture(scope="session")
+def dem_color():
+    return grid("./data/n55_e008_1arc_v3.bil").resample(0.01).color("terrain")
+
+
+@pytest.fixture(scope="session")
 def landsat():
     return search("landsat-c2-l2", [-122.52, 37.70, -122.35, 37.82])[0].download(["red", "green", "blue"])
 
@@ -25,64 +32,64 @@ def save(obj, file_name):
     return hash, compress
 
 
-def test_saving_dem_jpg():
+def test_saving_dem_jpg(dem):
     hash, compress = save(dem, "tests/output/temp/dem.jpg")
     assert hash
 
 
-def test_saving_dem_tif():
+def test_saving_dem_tif(dem):
     hash, compress = save(dem, "tests/output/temp/dem.tif")
     assert compress == "lzw"
 
 
-def test_saving_dem_img():
+def test_saving_dem_img(dem):
     hash, compress = save(dem, "tests/output/temp/dem.img")
     assert hash == "0834c56700cf1cc3b7155a8ef6e8b922"
 
 
-def test_saving_dem_bil():
+def test_saving_dem_bil(dem):
     hash, compress = save(dem, "tests/output/temp/dem.bil")
     assert hash == "ce6230320c089d41ddbc8b3f17fd0c0d"
 
 
-def test_saving_dem_color_jpg():
+def test_saving_dem_color_jpg(dem_color):
     hash, compress = save(dem_color, "tests/output/temp/dem_color.jpg")
     assert hash
 
 
-def test_saving_dem_color_tif():
+def test_saving_dem_color_tif(dem_color):
     hash, compress = save(dem_color, "tests/output/temp/dem_color.tif")
     assert compress == "lzw"
 
 
-def test_saving_dem_color_img():
+def test_saving_dem_color_img(dem_color):
     hash, compress = save(dem_color, "tests/output/temp/dem_color.img")
     assert hash == "0834c56700cf1cc3b7155a8ef6e8b922"
 
 
-def test_saving_dem_color_bil():
+def test_saving_dem_color_bil(dem_color):
     hash, compress = save(dem_color, "tests/output/temp/dem_color.bil")
     assert hash == "ce6230320c089d41ddbc8b3f17fd0c0d"
 
 
-def test_saving_landsat_jpg():
-    hash, compress = save(landsat(), "tests/output/temp/landsat.jpg")
+def test_saving_landsat_jpg(landsat):
+    hash, compress = save(landsat, "tests/output/temp/landsat.jpg")
     assert hash
 
 
-def test_saving_landsat_tif():
-    hash, compress = save(landsat(), "tests/output/temp/landsat.tif")
+def test_saving_landsat_tif(landsat):
+    hash, compress = save(landsat, "tests/output/temp/landsat.tif")
     assert hash
     assert compress == "lzw"
 
 
-def test_saving_landsat_img():
-    hash, compress = save(landsat(), "tests/output/temp/landsat.img")
+def test_saving_landsat_img(landsat):
+    hash, compress = save(landsat, "tests/output/temp/landsat.img")
     assert hash
     assert compress is None
 
 
-def test_saving_landsat_bil():
-    hash, compress = save(landsat(), "tests/output/temp/landsat.bil")
+def test_saving_landsat_bil(landsat):
+    hash, compress = save(landsat, "tests/output/temp/landsat.bil")
     assert hash
     assert compress is None

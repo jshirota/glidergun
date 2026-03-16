@@ -7,7 +7,7 @@ def tick(grid: Grid):
 
 
 def test_glidergun():
-    gosper = tick(grid("tests/input/glidergun.asc"))
+    gosper = tick(grid("./data/glidergun.asc"))
     md5s = set()
     while gosper.sha256 not in md5s:
         md5s.add(gosper.sha256)

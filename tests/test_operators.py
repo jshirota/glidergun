@@ -368,3 +368,13 @@ def test_int32_invert():
     g = grid(np.array([[1, 0], [1, 0]])).type("int32")
     result = ~g
     assert result.dtype == "bool"
+
+
+def test_standardize():
+    g1 = grid((30, 40))
+    g2 = grid((50, 50)).resample_by(1.2)
+    assert g1.cell_size != g2.cell_size
+    assert g1.extent != g2.extent
+    g3, g4 = g1 + g2, g2 + g1
+    assert g3.cell_size == g4.cell_size
+    assert g3.extent == g4.extent
