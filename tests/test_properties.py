@@ -1,15 +1,18 @@
 import numpy as np
 import pytest
+from rasterio.crs import CRS
 from rasterio.transform import from_origin
 
-from glidergun import CellSize, Extent, grid
+from glidergun import Extent
+from glidergun.grid import from_ndarray
+from tests.utils import extents_equal
 
 
 @pytest.fixture
 def sample_grid():
     data = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=float)
     transform = from_origin(0, 3, 1, 1)  # top-left corner at (0, 3), cell size 1x1
-    return grid(data, transform, 4326)
+    return from_ndarray(data, transform, crs=4326)
 
 
 def test_width(sample_grid):
@@ -58,7 +61,7 @@ def test_ymax(sample_grid):
 
 
 def test_extent(sample_grid):
-    assert sample_grid.extent == Extent(0, 0, 3, 3)
+    assert extents_equal(sample_grid.extent, Extent(0, 0, 3, 3, CRS.from_epsg(3857)))
     assert isinstance(sample_grid.extent[0], float)
     assert isinstance(sample_grid.extent[1], float)
     assert isinstance(sample_grid.extent[2], float)
@@ -86,7 +89,7 @@ def test_max(sample_grid):
 
 
 def test_cell_size(sample_grid):
-    assert sample_grid.cell_size == CellSize(1, 1)
+    assert sample_grid.cell_size == (1, 1)
     assert isinstance(sample_grid.cell_size[0], float)
     assert isinstance(sample_grid.cell_size[1], float)
 

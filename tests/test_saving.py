@@ -19,7 +19,7 @@ def dem_color():
 
 @pytest.fixture(scope="session")
 def landsat():
-    return search("landsat-c2-l2", [-122.52, 37.70, -122.35, 37.82])[0].download(["red", "green", "blue"])
+    return search("landsat-c2-l2", [-122.52, 37.70, -122.35, 37.82])[0].get(["red", "green", "blue"], resample_by=10)
 
 
 def save(obj, file_name):

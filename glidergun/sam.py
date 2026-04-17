@@ -18,7 +18,7 @@ class SamResult:
 
     def mask(self, *labels: str) -> Grid:
         polygons = [(mask.to_polygon(), 1) for mask in self.masks if not labels or mask.label in labels]
-        return grid(polygons, self.source.extent, self.source.crs, self.source.cell_size) == 1
+        return grid(polygons, self.source.extent, cell_size=self.source.cell_size) == 1
 
     def highlight(self, *labels: str) -> Stack:
         return self.source.each(lambda g: con(self.mask(*labels), g, g / 5)).type("uint8", 0)
@@ -115,7 +115,7 @@ def _execute_sam(
 
     for label in prompt:
         for m, s in evaluate(label):
-            g = grid(m, extent=stack.extent, crs=stack.crs)
+            g = grid(m, extent=stack.extent)
             yield SamMask(label=label, score=float(s), mask=g.clip(g.set_nan(0).data_extent))
 
 

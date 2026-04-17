@@ -1,3 +1,8 @@
+import os
+import sys
+from datetime import datetime
+from typing import TYPE_CHECKING
+
 import numpy as np
 from numpy import ndarray
 from rasterio.crs import CRS
@@ -5,14 +10,37 @@ from rasterio.drivers import driver_from_extension
 from rasterio.io import MemoryFile
 from rasterio.warp import transform
 
+if TYPE_CHECKING:
+    from glidergun.geojson import FeatureCollection
+    from glidergun.stac import Grid, Stack
+
 
 def get_crs(crs: int | str | CRS):
+    if isinstance(crs, int):
+        try:
+            return CRS.from_epsg(crs)
+        except Exception:
+            pass
+        try:
+            return CRS.from_string(f"ESRI:{crs}")
+        except Exception as ex:
+            raise ValueError(f"Unknown CRS code: {crs}") from ex
+
     if isinstance(crs, str):
+        if crs.isdigit():
+            return get_crs(int(crs))
         try:
             return CRS.from_string(crs)
-        except Exception:
-            return CRS.from_wkt(crs)
-    return CRS.from_epsg(crs) if isinstance(crs, int) else crs
+        except Exception as ex:
+            raise ValueError(f"Invalid CRS string: {crs}") from ex
+    return crs
+
+
+def get_crs_name(crs: int | str | CRS) -> str:
+    try:
+        return get_crs(crs).to_wkt().split('"')[1]
+    except Exception:
+        return "Unknown"
 
 
 def project(x: float, y: float, from_crs: int | str | CRS, to_crs: int | str | CRS):
@@ -53,3 +81,52 @@ def is_image_format(driver: str, file: str | MemoryFile) -> bool:
 
 def is_tile_url(url: str) -> bool:
     return url.startswith(("http://", "https://")) and "{" in url and "}" in url
+
+
+def add_to_map(data: "Grid | Stack | FeatureCollection", name: str | None):
+    from glidergun.geojson import FeatureCollection
+
+    file = name or datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+
+    def save(folder: str):
+        if isinstance(data, FeatureCollection):
+            file_path = os.path.join(folder, file + ".json")
+        else:
+            file_path = os.path.join(folder, file + ".tif")
+        data.save(file_path)
+        return file_path
+
+    if "arcpy" in sys.modules:
+        try:
+            import arcpy  # type: ignore
+
+            aprx = arcpy.mp.ArcGISProject("CURRENT")
+            folder = arcpy.env.scratchFolder
+            file_path = save(folder)
+
+            if isinstance(data, FeatureCollection):
+                arcpy.conversion.JSONToFeatures(
+                    in_json_file=file_path, out_features=os.path.join(folder, file), geometry_type="POLYGON"
+                )
+            else:
+                aprx.activeMap.addDataFromPath(file_path)
+        except Exception as ex:
+            print(f"Failed to add layer to active map: {ex}")
+        return
+
+    if "qgis.core" in sys.modules:
+        try:
+            from qgis.core import QgsProcessingUtils, QgsProject, QgsRasterLayer, QgsVectorLayer  # type: ignore
+
+            folder = QgsProcessingUtils.tempFolder()
+            file_path = save(folder)
+
+            if isinstance(data, FeatureCollection):
+                QgsProject.instance().addMapLayer(QgsVectorLayer(file_path, file + ".json", "ogr"))
+            else:
+                QgsProject.instance().addMapLayer(QgsRasterLayer(file_path, file + ".tif"))
+        except Exception as ex:
+            print(f"Failed to add layer to active map: {ex}")
+        return
+
+    raise RuntimeError("This function is only supported within ArcGIS Pro or QGIS.")

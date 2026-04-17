@@ -217,6 +217,7 @@ InterpolationKernel = Literal[
 ]
 
 ResamplingMethod = Literal[
+    "average",
     "bilinear",
     "cubic",
     "nearest",

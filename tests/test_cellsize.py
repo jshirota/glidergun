@@ -1,4 +1,4 @@
-from glidergun import CellSize
+from glidergun.types import CellSize
 
 
 def test_cellsize_mul():
