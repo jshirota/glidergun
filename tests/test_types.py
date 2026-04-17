@@ -17,17 +17,17 @@ def test_gridcore():
 
 
 def test_extent_intersect():
-    extent1 = Extent(0, 0, 10, 10)
-    extent2 = Extent(5, 5, 15, 15)
-    expected = Extent(5, 5, 10, 10)
+    extent1 = Extent(0, 0, 10, 10, CRS.from_epsg(3857))
+    extent2 = Extent(5, 5, 15, 15, CRS.from_epsg(3857))
+    expected = Extent(5, 5, 10, 10, CRS.from_epsg(3857))
 
     assert extent1.intersect(extent2) == expected
 
 
 def test_extent_union():
-    extent1 = Extent(0, 0, 10, 10)
-    extent2 = Extent(5, 5, 15, 15)
-    expected = Extent(0, 0, 15, 15)
+    extent1 = Extent(0, 0, 10, 10, CRS.from_epsg(3857))
+    extent2 = Extent(5, 5, 15, 15, CRS.from_epsg(3857))
+    expected = Extent(0, 0, 15, 15, CRS.from_epsg(3857))
 
     assert extent1.union(extent2) == expected
 
