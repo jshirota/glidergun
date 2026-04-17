@@ -10,16 +10,16 @@ def test_sentinel_visual():
     i = items[0]
     assert i.id
     assert i.datetime
-    s = i.download("visual")
+    s = i.get("visual")
     assert len(s.grids) == 3
-    assert s.dtype == "float32"
+    assert s.dtype == "uint8"
 
     s.save("tests/output/temp/sentinel_test.tif")
     s2 = stack("tests/output/temp/sentinel_test.tif")
     assert s2.crs == s.crs
     assert extents_equal(s2.extent, s.extent)
     assert len(s2.grids) == 3
-    assert s2.dtype == "float32"
+    assert s2.dtype == "uint8"
 
     shutil.rmtree("tests/output/temp")
 
@@ -30,9 +30,9 @@ def test_sentinel_rgb():
     i = items[0]
     assert i.id
     assert i.datetime
-    s = i.download(["B04", "B03", "B02"])
+    s = i.get(["B04", "B03", "B02"], resample_by=10)
     assert len(s.grids) == 3
-    assert s.dtype == "float32"
+    assert s.dtype == "uint16"
 
     s.save("tests/output/temp/sentinel_rgb.tif")
     s2 = stack("tests/output/temp/sentinel_rgb.tif")
@@ -50,7 +50,7 @@ def test_landsat_rgb():
     i = items[0]
     assert i.id
     assert i.datetime
-    s = i.download(["red", "green", "blue"])
+    s = i.get(["red", "green", "blue"])
     assert len(s.grids) == 3
     assert s.dtype == "float32"
 
@@ -70,7 +70,7 @@ def test_landsat_red():
     i = items[0]
     assert i.id
     assert i.datetime
-    g = i.download("red")
+    g = i.get("red")
     assert g.dtype == "float32"
 
     g.save("tests/output/temp/landsat_red.bil")
@@ -89,10 +89,10 @@ def test_other():
     i = items[0]
     assert i.id
     assert i.datetime
-    s = i.download(["red", "green", "blue"])
+    s = i.get(["red", "green", "blue"])
     assert isinstance(s, Stack)
 
-    g = i.download("red")
+    g = i.get("red")
     assert isinstance(g, Grid)
 
 
@@ -105,8 +105,8 @@ def test_preview():
     assert t.isoformat() <= "1987-01-01"
     assert t.isoformat() >= "1986-01-01"
 
-    s1 = item.download(["red", "green", "blue"])
-    s2 = item.download(["red", "green", "blue"], preview=False)
+    s1 = item.get(["red", "green", "blue"], resample_by=10)
+    s2 = item.get(["red", "green", "blue"])
 
     assert s1.crs == s2.crs
     assert s1.width < s2.width / 2

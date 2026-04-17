@@ -5,8 +5,10 @@ import numpy as np
 import pytest
 import rasterio
 
-from glidergun import Grid, con, grid, mosaic
-from glidergun.grid import _to_uint8_range
+from glidergun import Grid, grid, mosaic
+from glidergun.grid import _to_uint8_range, con
+from glidergun.types import Extent
+from tests.utils import extents_equal
 
 
 @pytest.fixture(scope="session")
@@ -97,14 +99,14 @@ def test_buffer_4(dem):
 def test_clip(dem):
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin + 0.02, ymin + 0.03, xmax - 0.04, ymax - 0.05
-    for a, b in zip(dem.clip(extent).extent, extent, strict=False):
+    for a, b in zip(dem.clip(extent).extent, extent, strict=True):
         assert pytest.approx(a, 0.001) == b
 
 
 def test_clip_2(dem):
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin - 0.02, ymin - 0.03, xmax + 0.04, ymax + 0.05
-    for a, b in zip(dem.clip(extent).extent, extent, strict=False):
+    for a, b in zip(dem.clip(extent).extent, extent, strict=True):
         assert pytest.approx(a, 0.001) == b
 
 
@@ -190,8 +192,8 @@ def test_hillshade(dem):
 
 def test_interp_linear():
     points = [(-120, 50, 100), (-110, 50, 200), (-110, 40, 300), (-120, 40, 400)]
-    extent = (-121, 39, -109, 51)
-    g = grid(points, extent, 4326, 0.1)
+    extent = Extent(-121, 39, -109, 51, crs=4326)
+    g = grid(points, extent, cell_size=0.1)
     g = g.interp_linear()
     assert g.value_at(-100, 45) is np.nan
     assert 100 < g.value_at(-115, 45) < 400
@@ -199,8 +201,8 @@ def test_interp_linear():
 
 def test_interp_nearest():
     points = [(-120, 50, 100), (-110, 50, 200), (-110, 40, 300), (-120, 40, 400)]
-    extent = (-121, 39, -109, 51)
-    g = grid(points, extent, 4326, 0.1)
+    extent = Extent(-121, 39, -109, 51, crs=4326)
+    g = grid(points, extent, cell_size=0.1)
     g = g.interp_nearest()
     assert g.value_at(-100, 45) is np.nan
     assert g.value_at(-112, 42) == 300
@@ -208,8 +210,8 @@ def test_interp_nearest():
 
 def test_interp_rbf():
     points = [(-120, 50, 100), (-110, 50, 200), (-110, 40, 300), (-120, 40, 400)]
-    extent = (-121, 39, -109, 51)
-    g = grid(points, extent, 4326, 0.1)
+    extent = Extent(-121, 39, -109, 51, crs=4326)
+    g = grid(points, extent, cell_size=0.1)
     g = g.interp_rbf()
     assert g.value_at(-100, 45) is np.nan
     assert 100 < g.value_at(-115, 45) < 400
@@ -320,13 +322,7 @@ def test_to_points(dem):
 
 def test_to_points_2(dem):
     g1 = dem.resample(0.1).randomize()
-    g2 = grid(g1.to_points(), g1.extent, g1.crs, g1.cell_size)
-    assert g1.sha256 == g2.sha256
-
-
-def test_to_points_3(dem):
-    g1 = dem.resample(0.01234).randomize()
-    g2 = grid(g1.to_points(), g1.extent, g1.crs, g1.cell_size)
+    g2 = grid(g1.to_points(), g1.extent, cell_size=g1.cell_size)
     assert g1.sha256 == g2.sha256
 
 
@@ -450,9 +446,9 @@ def test_tan(dem):
 def test_round(dem):
     g = dem.resample(0.01).randomize()
     points = g.to_points()
-    for p1, p2 in zip(points, g.round().to_points(), strict=False):
+    for p1, p2 in zip(points, g.round().to_points(), strict=True):
         assert pytest.approx(p2[2], 0.01) == round(p1[2])
-    for p1, p2 in zip(points, g.round(3).to_points(), strict=False):
+    for p1, p2 in zip(points, g.round(3).to_points(), strict=True):
         assert pytest.approx(p2[2], 0.01) == round(p1[2], 3)
 
 
@@ -479,7 +475,7 @@ def save(g1: Grid, file: str, strict: bool = True):
     g2 = grid(file_path)
     if strict:
         assert g2.sha256 == g1.sha256
-    assert g2.extent == g1.extent
+    assert extents_equal(g2.extent, g1.extent)
     shutil.rmtree(folder)
 
 

@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from rasterio.warp import Resampling
 
 from glidergun import Grid, grid
 
@@ -117,7 +118,7 @@ class TestFocal:
 
     def get_focal_grids(self, g: Grid, func) -> tuple[Grid, Grid]:
         extent = 0.2, 0.2, 0.3, 0.3
-        g1 = g.georeference((0, 0, 1, 1)).resample(0.001, "bilinear")
+        g1 = g.georeference((0, 0, 1, 1)).resample(0.001, Resampling.bilinear)
         g2 = func(g1, buffer=20, circle=True, max_workers=1).clip(extent)
         g3 = func(g1.clip((0.1, 0.1, 0.4, 0.4)), buffer=20, circle=True).clip(extent)
         return g2, g3

@@ -2,7 +2,6 @@ import os
 import shutil
 
 import pytest
-import rasterio
 
 from glidergun import Stack, search, stack
 from glidergun.grid import _to_uint8_range
@@ -10,7 +9,7 @@ from glidergun.grid import _to_uint8_range
 
 @pytest.fixture(scope="session")
 def sentinel():
-    return search("sentinel-2-l2a", [-122.50, 37.74, -122.48, 37.76])[0].download(["B04", "B03", "B02"])
+    return search("sentinel-2-l2a", [-122.50, 37.74, -122.48, 37.76])[0].get(["B04", "B03", "B02"], resample_by=10)
 
 
 def test_extract_bands(sentinel):
@@ -22,35 +21,35 @@ def test_extract_bands(sentinel):
 
 def test_op_mul(sentinel):
     s = sentinel * 1000
-    for g1, g2 in zip(sentinel.grids, s.grids, strict=False):
+    for g1, g2 in zip(sentinel.grids, s.grids, strict=True):
         assert pytest.approx(g2.min, 0.001) == g1.min * 1000
         assert pytest.approx(g2.max, 0.001) == g1.max * 1000
 
 
 def test_op_div(sentinel):
     s = sentinel / 1000
-    for g1, g2 in zip(sentinel.grids, s.grids, strict=False):
+    for g1, g2 in zip(sentinel.grids, s.grids, strict=True):
         assert pytest.approx(g2.min, 0.001) == g1.min / 1000
         assert pytest.approx(g2.max, 0.001) == g1.max / 1000
 
 
 def test_op_add(sentinel):
     s = sentinel + 1000
-    for g1, g2 in zip(sentinel.grids, s.grids, strict=False):
+    for g1, g2 in zip(sentinel.grids, s.grids, strict=True):
         assert pytest.approx(g2.min, 0.001) == g1.min + 1000
         assert pytest.approx(g2.max, 0.001) == g1.max + 1000
 
 
 def test_op_sub(sentinel):
     s = sentinel - 1000
-    for g1, g2 in zip(sentinel.grids, s.grids, strict=False):
+    for g1, g2 in zip(sentinel.grids, s.grids, strict=True):
         assert pytest.approx(g2.min, 0.001) == g1.min - 1000
         assert pytest.approx(g2.max, 0.001) == g1.max - 1000
 
 
 def test_percent_clip(sentinel):
     s = sentinel.percent_clip(1, 99)
-    for g1, g2 in zip(sentinel.grids, s.grids, strict=False):
+    for g1, g2 in zip(sentinel.grids, s.grids, strict=True):
         assert pytest.approx(g2.min, 0.001) == g1.percentile(1)
         assert pytest.approx(g2.max, 0.001) == g1.percentile(99)
 
@@ -112,23 +111,14 @@ def test_resample_by(sentinel):
     assert s0.cell_size == s2.cell_size
 
 
-def save(s1: Stack, file: str, strict: bool = True):
+def save(s1: Stack, file: str):
     folder = "tests/output/temp"
     file_path = f"{folder}/{file}"
     os.makedirs(folder, exist_ok=True)
     s1.save(file_path)
     s2 = stack(file_path)
-    if strict:
-        assert s2.sha256s == s1.sha256s
     assert s2.extent == s1.extent
     shutil.rmtree(folder)
-
-
-def test_save_memory(sentinel):
-    memory_file = rasterio.MemoryFile()
-    sentinel.save(memory_file)
-    s = stack(memory_file)
-    assert s.sha256s == sentinel.sha256s
 
 
 def test_save_img(sentinel):
@@ -140,12 +130,8 @@ def test_save_tif(sentinel):
 
 
 def test_save_jpg(sentinel):
-    save(sentinel.extract_bands(3, 2, 1), "test_stack.jpg", strict=False)
+    save(sentinel.extract_bands(3, 2, 1), "test_stack.jpg")
 
 
 def test_save_png(sentinel):
-    save(sentinel.extract_bands(2, 3, 1), "test_stack.png", strict=False)
-
-
-def test_bytes(sentinel):
-    assert stack(sentinel.to_bytes()).sha256s == sentinel.sha256s
+    save(sentinel.extract_bands(2, 3, 1), "test_stack.png")

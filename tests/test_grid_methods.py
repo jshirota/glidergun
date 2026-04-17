@@ -1,6 +1,8 @@
 import numpy as np
 
 from glidergun import grid
+from glidergun.types import Extent
+from tests.utils import extents_equal
 
 
 def test_grid_reclass():
@@ -47,9 +49,9 @@ def test_grid_value():
 
 def test_grid_interp_clough_tocher():
     points = [(1, 1, 10), (4, 7, 40), (8, 2, 7)]
-    extent = (0, 0, 10, 10)
-    g = grid(points, extent, 4326, 1).interp_clough_tocher()
-    assert g.extent == extent
+    extent = Extent(0, 0, 10, 10, crs=4326)
+    g = grid(points, extent, cell_size=1).interp_clough_tocher()
+    assert extents_equal(g.extent, extent)
     assert g.crs == 4326
     assert g.cell_size == (1.0, 1.0)
     assert g.value_at(2, 2) == 12.54273509979248
@@ -59,9 +61,9 @@ def test_grid_interp_clough_tocher():
 
 def test_grid_interp_linear():
     points = [(1, 1, 10), (4, 7, 40), (8, 2, 7)]
-    extent = (0, 0, 10, 10)
-    g = grid(points, extent, 4326, 1).interp_linear()
-    assert g.extent == extent
+    extent = Extent(0, 0, 10, 10, crs=4326)
+    g = grid(points, extent, cell_size=1).interp_linear()
+    assert extents_equal(g.extent, extent)
     assert g.crs == 4326
     assert g.cell_size == (1.0, 1.0)
     assert g.value_at(2, 2) == 12.54273509979248
@@ -71,9 +73,9 @@ def test_grid_interp_linear():
 
 def test_grid_interp_nearest():
     points = [(40, 30, 123), (30, 34, 777)]
-    extent = (28, 28, 42, 36)
-    g = grid(points, extent, 4326, 1).interp_nearest()
-    assert g.extent == extent
+    extent = Extent(28, 28, 42, 36, crs=4326)
+    g = grid(points, extent, cell_size=1).interp_nearest()
+    assert extents_equal(g.extent, extent)
     assert g.crs == 4326
     assert g.cell_size == (1.0, 1.0)
     assert g.value_at(30, 30) == 777
@@ -84,9 +86,9 @@ def test_grid_interp_nearest():
 
 def test_grid_interp_rbf():
     points = [(1, 1, 10), (4, 7, 40), (8, 2, 7)]
-    extent = (0, 0, 10, 10)
-    g = grid(points, extent, 4326, 1).interp_rbf()
-    assert g.extent == extent
+    extent = Extent(0, 0, 10, 10, crs=4326)
+    g = grid(points, extent, cell_size=1).interp_rbf()
+    assert extents_equal(g.extent, extent)
     assert g.crs == 4326
     assert g.cell_size == (1.0, 1.0)
     assert g.value_at(2, 2) == 12.54273509979248
@@ -96,16 +98,16 @@ def test_grid_interp_rbf():
 
 def test_grid_interp_compare():
     points = [(1, 1, 10), (4, 7, 40), (8, 2, 7)]
-    extent = (0, 0, 10, 10)
-    g1 = grid(points, extent, 4326, 1).interp_linear()
-    g2 = grid(points, extent, 4326, 1).interp_rbf()
+    extent = Extent(0, 0, 10, 10, crs=4326)
+    g1 = grid(points, extent, cell_size=1).interp_linear()
+    g2 = grid(points, extent, cell_size=1).interp_rbf()
     g3 = g1 - g2
     assert g3.min == g3.max == 0
 
     points = [(1, 1, 10), (4, 7, 40), (8, 2, 7), (9, 2, 7)]
-    extent = (0, 0, 10, 10)
-    g1 = grid(points, extent, 4326, 1).interp_linear()
-    g2 = grid(points, extent, 4326, 1).interp_rbf()
+    extent = Extent(0, 0, 10, 10, crs=4326)
+    g1 = grid(points, extent, cell_size=1).interp_linear()
+    g2 = grid(points, extent, cell_size=1).interp_rbf()
     g3 = g1 - g2
     assert g3.min != g3.max
 

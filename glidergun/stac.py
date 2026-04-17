@@ -1,6 +1,9 @@
 from datetime import datetime, timezone
 from typing import Generic, Literal, TypeVar, cast, overload
-from urllib.parse import urlencode
+
+from rasterio.warp import Resampling
+
+from glidergun.literals import ResamplingMethod
 
 try:
     from typing import Never  # type: ignore
@@ -10,12 +13,12 @@ except ImportError:  # Python < 3.11
 import requests
 from pystac.item import Item as PystacItem
 from rasterio.crs import CRS
-from shapely.geometry import box, shape
+from shapely.geometry import shape
 
 from glidergun.grid import Grid, standardize
 from glidergun.mosaic import mosaic
 from glidergun.stack import Stack, stack
-from glidergun.types import Extent
+from glidergun.types import BBox, Extent
 
 planetary_computer_url = "https://planetarycomputer.microsoft.com/api/stac/v1"
 
@@ -39,20 +42,37 @@ class ItemBase(PystacItem):
             return pc.sign(url)
         return url
 
-    def download(self, asset: str | list[str], clip_to_extent: bool = True, preview: bool = True) -> Grid | Stack:
-        is_preview = preview and self.url == planetary_computer_url
-        if is_preview:
-            params = {"collection": self.collection_id, "item": self.id, "assets": asset}
-            url = "https://planetarycomputer.microsoft.com/api/data/v1/item/preview.tif?" + urlencode(
-                params, doseq=True
+    def get(
+        self,
+        asset: str | list[str],
+        *,
+        clip_to_search_extent: bool = True,
+        resample_by: float | None = None,
+        resampling: ResamplingMethod | Resampling = "nearest",
+    ) -> Grid | Stack:
+        if isinstance(asset, list):
+            return stack(
+                standardize(
+                    *(
+                        cast(
+                            Grid,
+                            self.get(
+                                a,
+                                clip_to_search_extent=clip_to_search_extent,
+                                resample_by=resample_by,
+                                resampling=resampling,
+                            ),
+                        )
+                        for a in asset
+                    )
+                )
             )
-            s = stack(url, self.extent if clip_to_extent else None, self.crs)
-        else:
-            if isinstance(asset, list):
-                return stack(standardize(*(cast(Grid, self.download(a, clip_to_extent, preview)) for a in asset)))
-            s = stack(self.get_url(asset), self.extent if clip_to_extent else None, self.crs)
-        if is_preview:
-            s = stack([g.set_nan(s.grids[-1] == 0) for g in s.grids[:-1]])
+        s = stack(
+            self.get_url(asset),
+            self.extent if clip_to_search_extent else None,
+            resample_by=resample_by,
+            resampling=resampling,
+        )
         if len(s.grids) == 1:
             return s.first
         return s
@@ -64,26 +84,57 @@ TStack = TypeVar("TStack", bound=str)
 
 class Item(ItemBase, Generic[TGrid, TStack]):
     @overload
-    def download(self, asset: TGrid, clip_to_extent: bool = True, preview: bool = True) -> Grid: ...
+    def get(
+        self,
+        asset: TGrid,
+        *,
+        clip_to_search_extent: bool = True,
+        resample_by: float | None = None,
+        resampling: ResamplingMethod | Resampling = "nearest",
+    ) -> Grid: ...
 
     @overload
-    def download(self, asset: TStack, clip_to_extent: bool = True, preview: bool = True) -> Stack: ...
+    def get(
+        self,
+        asset: TStack,
+        *,
+        clip_to_search_extent: bool = True,
+        resample_by: float | None = None,
+        resampling: ResamplingMethod | Resampling = "nearest",
+    ) -> Stack: ...
 
     @overload
-    def download(self, asset: list[TGrid], clip_to_extent: bool = True, preview: bool = True) -> Stack: ...
+    def get(
+        self,
+        asset: list[TGrid],
+        *,
+        clip_to_search_extent: bool = True,
+        resample_by: float | None = None,
+        resampling: ResamplingMethod | Resampling = "nearest",
+    ) -> Stack: ...
 
-    def download(self, asset, clip_to_extent: bool = True, preview: bool = True):
-        return super().download(asset, clip_to_extent=clip_to_extent, preview=preview)
+    def get(
+        self,
+        asset,
+        *,
+        clip_to_search_extent: bool = True,
+        resample_by: float | None = None,
+        resampling: ResamplingMethod | Resampling = "nearest",
+    ):
+        return super().get(
+            asset, clip_to_search_extent=clip_to_search_extent, resample_by=resample_by, resampling=resampling
+        )
 
 
 @overload
 def search(
     collection: Literal["landsat-c2-l2"],
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     query: dict | None = None,
     *,
     datetime: DateRange | None = None,
-    fully_contains_search_area: bool = True,
+    limit: int = 10,
+    fully_contains_search_extent: bool = True,
     cloud_cover_percent: float | None = None,
 ) -> list[
     Item[
@@ -116,11 +167,12 @@ def search(
 @overload
 def search(
     collection: Literal["sentinel-2-l2a"],
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     query: dict | None = None,
     *,
     datetime: DateRange | None = None,
-    fully_contains_search_area: bool = True,
+    limit: int = 10,
+    fully_contains_search_extent: bool = True,
     cloud_cover_percent: float | None = None,
 ) -> list[
     Item[
@@ -135,31 +187,34 @@ def search(
 @overload
 def search(
     collection: str,
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     query: dict | None = None,
     *,
     url: str = planetary_computer_url,
     datetime: DateRange | None = None,
-    fully_contains_search_area: bool = True,
+    limit: int = 10,
+    fully_contains_search_extent: bool = True,
 ) -> list[ItemBase]: ...
 
 
 def search(
     collection: str,
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     query: dict | None = None,
     *,
     url: str = planetary_computer_url,
     datetime: DateRange | None = None,
-    fully_contains_search_area: bool = True,
+    limit: int = 10,
+    fully_contains_search_extent: bool = True,
     cloud_cover_percent: float | None = None,
 ):
-    xmin, ymin, xmax, ymax = extent
-    search_extent = Extent(xmin, ymin, xmax, ymax)
-    search_polygon = box(xmin, ymin, xmax, ymax)
+    from_crs = CRS.from_epsg(4326)
+    search_extent = extent.project(from_crs) if isinstance(extent, Extent) else Extent(*extent, crs=from_crs)
+    search_polygon = search_extent.to_polygon()
 
     json = {
-        "bbox": list(extent),
+        "bbox": list(search_extent),
+        "limit": limit,
         "collections": [collection],
         "query": {"eo:cloud_cover": {"lt": cloud_cover_percent}} | (query or {})
         if cloud_cover_percent is not None
@@ -177,19 +232,18 @@ def search(
     response.raise_for_status()
 
     features = []
-    from_crs = CRS.from_epsg(4326)
 
     for feature in response.json()["features"]:
         geometry = shape(feature["geometry"])
-        if not fully_contains_search_area or search_polygon.within(geometry):
-            if fully_contains_search_area:
+        if not fully_contains_search_extent or search_polygon.within(geometry):
+            if fully_contains_search_extent:
                 data_extent = search_extent
             else:
-                data_extent = Extent(*search_polygon.intersection(geometry).bounds)
+                data_extent = Extent(*search_polygon.intersection(geometry).bounds, from_crs)
             to_crs = CRS.from_epsg(feature["properties"]["proj:epsg"])
             item = ItemBase.from_dict(feature)
             item.url = url
-            item.extent = data_extent.project(from_crs, to_crs)
+            item.extent = data_extent.project(to_crs)
             item.crs = to_crs
             features.append(item)
 
@@ -207,12 +261,19 @@ def to_iso_string(t: str | datetime | None) -> str:
 
 
 def search_mosaic(
-    url: str, collection: str, asset: str, extent: tuple[float, float, float, float] | list[float]
+    url: str,
+    collection: str,
+    asset: str,
+    extent: BBox,
+    limit: int,
+    resample_by: float | None,
+    resampling: Resampling | ResamplingMethod,
 ) -> Grid:
-    items = search(collection, extent, url=url, fully_contains_search_area=False)
+    items = search(collection, extent, url=url, limit=limit, fully_contains_search_extent=False)
     if not items:
         raise ValueError(f"No items found for the given extent: {extent}")
-    g = mosaic(*[i.get_url(asset) for i in items]).clip(extent)
+    m = mosaic(*[i.get_url(asset) for i in items])
+    g = m.clip(extent, resample_by=resample_by, resampling=resampling)
     if not g:
         raise ValueError(f"Mosaic resulted in no data for the given extent: {extent}")
     return g

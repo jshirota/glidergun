@@ -40,8 +40,8 @@ from glidergun.io import http_get, write_to_file
 from glidergun.literals import Basemap, BasemapUrl, DataType, ExtentResolution, ResamplingMethod
 from glidergun.plot import create_histogram, create_thumbnail
 from glidergun.quadkey import get_rows
-from glidergun.types import CellSize, Chart, Scaler
-from glidergun.utils import get_crs, get_driver, get_nodata_value, is_image_format, is_tile_url
+from glidergun.types import BBox, CellSize, Chart, Scaler
+from glidergun.utils import add_to_active_map, get_crs_name, get_driver, get_nodata_value, is_image_format, is_tile_url
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class Stack:
     def __repr__(self):
         return (
             f"image: {self.width}x{self.height} {self.dtype} | "
-            + f"crs: {self.crs} | "
+            + f"crs: {self.crs} {get_crs_name(self.crs)} | "
             + f"count: {len(self.grids)} | "
             + f"rgb: {self.display} | "
             + f"cell: {self.cell_size} | "
@@ -304,20 +304,25 @@ class Stack:
         """Apply a numpy function to the data for each grid."""
         return self.each(lambda g: g.local(func))
 
-    def georeference(self, extent: tuple[float, float, float, float] | list[float], crs: int | str | CRS | None = None):
+    def georeference(self, extent: BBox, crs: int | str | CRS | None = None):
         """Assign extent and CRS to the current data without resampling."""
         return self.each(lambda g: g.georeference(extent, crs))
 
     def georeference_to(self, reference: "Grid | Stack"):
         """Automatically georeference to a reference grid or stack using scan + LoFTR."""
-        from glidergun.loftr import georeference_to_reference
+        try:
+            from glidergun.loftr import georeference_to_reference
+        except ImportError as ex:
+            raise ImportError(
+                "This method requires the torch option.  Please install it with `pip install glidergun[torch]`."
+            ) from ex
 
         return georeference_to_reference(self, reference)
 
     def mosaic(self, *stacks: "Stack", blend: bool = False):
         return self.each(lambda i, g: g.mosaic(*(s.grids[i - 1] for s in stacks), blend=blend))
 
-    def clip(self, extent: tuple[float, float, float, float] | list[float]):
+    def clip(self, extent: BBox):
         """Clips the stack to the given extent."""
         return self.each(lambda g: g.clip(extent))
 
@@ -386,7 +391,7 @@ class Stack:
     ):
         """Combines two stacks by applying a function to corresponding bands."""
         grids = []
-        for grid1, grid2 in zip(self.grids, other_stack.grids, strict=False):
+        for grid1, grid2 in zip(self.grids, other_stack.grids, strict=True):
             grid1, grid2 = standardize(grid1, grid2, extent=extent)
             grids.append(func(grid1, grid2))
         return stack(grids)
@@ -445,7 +450,12 @@ class Stack:
         Returns:
             SamResult: Collection of masks and an overview visualization stack.
         """
-        from glidergun.sam import sam
+        try:
+            from glidergun.sam import sam
+        except ImportError as ex:
+            raise ImportError(
+                "This method requires the torch option.  Please install it with `pip install glidergun[torch]`."
+            ) from ex
 
         return sam(
             self,
@@ -505,19 +515,24 @@ class Stack:
 
         write_to_file(file, driver, dtype, nodata, *grids)
 
+    def add_to_active_map(self):
+        """Add as a layer to the active map in ArcGIS or QGIS."""
+        add_to_active_map(self)
+
 
 @overload
 def stack(
     data: str,
-    extent: tuple[float, float, float, float] | list[float] | None = None,
-    crs: int | str | CRS | None = None,
+    extent: BBox | None = None,
+    *,
+    resample_by: float | None = None,
+    resampling: Resampling | ResamplingMethod = "nearest",
 ) -> Stack:
     """Creates a new stack from a file path or url.
 
     Args:
         data (str): File path or url.
-        extent (tuple[float, float, float, float] | list[float]): Map extent used to clip the raster.
-        crs (int | str | CRS | None): Coordinate reference system of the extent.
+        extent (BBox | None): Map extent used to clip the raster.
 
     Example:
         >>> stack("aerial_photo.tif")
@@ -532,7 +547,8 @@ def stack(
 @overload
 def stack(
     data: Basemap | str,
-    extent: tuple[float, float, float, float] | list[float] = (-179.999, -85.0511, 179.999, 85.0511),
+    extent: BBox | None = (-179.999, -85.0511, 179.999, 85.0511),
+    *,
     max_tiles: int = 10,
     cache_dir: str | None = "~/.glidergun/cache",
     preserve_alpha: bool = False,
@@ -541,7 +557,7 @@ def stack(
 
     Args:
         data (str): Tile service url template with {x}{y}{z} or {q} placeholders.
-        extent (tuple[float, float, float, float] | list[float]): Map extent used to clip the raster.
+        extent (BBox): Map extent used to clip the raster.
         max_tiles (int, optional): Maximum number of tiles to load.  Defaults to 10.
         cache_dir (str | None, optional): Directory to cache downloaded tiles.  Defaults to "~/.glidergun/cache".
         preserve_alpha (bool, optional): Whether to preserve the alpha channel.  Defaults to False.
@@ -557,11 +573,18 @@ def stack(
 
 
 @overload
-def stack(data: DatasetReader) -> Stack:  # type: ignore
+def stack(  # type: ignore
+    data: DatasetReader,
+    extent: BBox | None = None,
+    *,
+    resample_by: float | None = None,
+    resampling: Resampling | ResamplingMethod = "nearest",
+) -> Stack:  # type: ignore
     """Creates a new stack from a data reader.
 
     Args:
         data: Data reader.
+        extent (BBox | None): Map extent used to clip the raster.
 
     Example:
         >>> with rasterio.open("aerial_photo.tif") as dataset:
@@ -576,11 +599,18 @@ def stack(data: DatasetReader) -> Stack:  # type: ignore
 
 
 @overload
-def stack(data: bytes) -> Stack:
+def stack(
+    data: bytes,
+    extent: BBox | None = None,
+    *,
+    resample_by: float | None = None,
+    resampling: Resampling | ResamplingMethod = "nearest",
+) -> Stack:
     """Creates a new stack from bytes data.
 
     Args:
         data: Bytes.
+        extent (BBox | None): Map extent used to clip the raster.
 
     Example:
         >>> stack(data)
@@ -593,11 +623,18 @@ def stack(data: bytes) -> Stack:
 
 
 @overload
-def stack(data: MemoryFile) -> Stack:  # type: ignore
+def stack(  # type: ignore
+    data: MemoryFile,
+    extent: BBox | None = None,
+    *,
+    resample_by: float | None = None,
+    resampling: Resampling | ResamplingMethod = "nearest",
+) -> Stack:  # type: ignore
     """Creates a new stack from a memory file.
 
     Args:
         data: Memory file.
+        extent (BBox | None): Map extent used to clip the raster.
 
     Example:
         >>> stack(memory_file)
@@ -610,11 +647,15 @@ def stack(data: MemoryFile) -> Stack:  # type: ignore
 
 
 @overload
-def stack(data: Sequence[Grid]) -> Stack:
+def stack(
+    data: Sequence[Grid],
+    extent: BBox | None = None,
+) -> Stack:
     """Creates a new stack from grids.
 
     Args:
         data: Grids.
+        extent (BBox | None): Map extent used to clip the raster.
 
     Example:
         >>> stack([r_grid, g_grid, b_grid])
@@ -629,15 +670,13 @@ def stack(data: Sequence[Grid]) -> Stack:
 @overload
 def stack(
     data: Sequence[str],
-    extent: tuple[float, float, float, float] | list[float] | None = None,
-    crs: int | str | CRS | None = None,
+    extent: BBox | None = None,
 ) -> Stack:
     """Creates a new stack from file paths or urls.
 
     Args:
         data: File paths or urls.
-        extent (tuple[float, float, float, float] | list[float]): Map extent used to clip the raster.
-        crs (int | str | CRS | None): Coordinate reference system of the extent.
+        extent (BBox | None): Map extent used to clip the raster.
 
     Example:
         >>> stack(["r.tif", "g.tif", "b.tif"])
@@ -649,10 +688,12 @@ def stack(
     ...
 
 
-def stack(  # type: ignore
+def stack(
     data: str | DatasetReader | bytes | MemoryFile | Sequence[Grid] | Sequence[str],
-    extent: tuple[float, float, float, float] | list[float] | None = None,
-    crs: int | str | CRS | None = None,
+    extent: BBox | None = None,
+    *,
+    resample_by: float | None = None,
+    resampling: Resampling | ResamplingMethod = "nearest",
     max_tiles: int | None = None,
     cache_dir: str | None = "~/.glidergun/cache",
     preserve_alpha: bool = False,
@@ -673,7 +714,7 @@ def stack(  # type: ignore
                     preserve_alpha,
                 )
 
-        if isinstance(data, (str, DatasetReader, bytes, MemoryFile)):
+        if isinstance(data, str | DatasetReader | bytes | MemoryFile):
             data = [data]
 
         bands: list[Grid] = []
@@ -681,17 +722,17 @@ def stack(  # type: ignore
         for g in data:
             if isinstance(g, str):
                 with rasterio.open(g) as dataset:
-                    bands.extend(read_grids(dataset, extent, crs))
+                    bands.extend(read_grids(dataset, extent, resample_by, resampling))
             elif isinstance(g, DatasetReader):
-                bands.extend(read_grids(g, extent, crs))
+                bands.extend(read_grids(g, extent, resample_by, resampling))
             elif isinstance(g, bytes):
                 with MemoryFile(g) as memory_file, memory_file.open() as dataset:
-                    bands.extend(read_grids(dataset, extent, crs))
+                    bands.extend(read_grids(dataset, extent, resample_by, resampling))
             elif isinstance(g, MemoryFile):
                 with g.open() as dataset:
-                    bands.extend(read_grids(dataset, extent, crs))
+                    bands.extend(read_grids(dataset, extent, resample_by, resampling))
             elif isinstance(g, Grid):
-                bands.append(g)
+                bands.append(g.clip(extent) if extent else g)
 
         def assert_unique(property: str):
             values = {getattr(g, property) for g in bands}
@@ -708,27 +749,29 @@ def stack(  # type: ignore
 
 
 def read_grids(
-    dataset, extent: tuple[float, float, float, float] | list[float] | None, crs: int | str | CRS | None
+    dataset, extent: BBox | None, resample_by: float | None, resampling: Resampling | ResamplingMethod
 ) -> Iterator[Grid]:
-    crs = get_crs(crs) if crs else None
     if dataset.subdatasets:
         for index, _ in enumerate(dataset.subdatasets):
             with rasterio.open(dataset.subdatasets[index]) as subdataset:
-                yield from read_grids(subdataset, extent, crs)
+                yield from read_grids(subdataset, extent, resample_by, resampling)
     elif dataset.indexes:
         for index in dataset.indexes:
             with contextlib.suppress(Exception):
-                yield from_dataset(dataset, extent, crs, None, index)
+                yield from_dataset(dataset, extent, index, resample_by, resampling)
 
 
 def from_tile_service(
     url_template: str,
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     max_tiles: int,
     max_zoom: int,
     cache_dir: str | None,
     preserve_alpha: bool,
 ) -> Stack:
+    if isinstance(extent, Extent):
+        extent = extent.project(4326)
+
     rows = get_rows(extent, max_tiles, max_zoom)
 
     if not rows:
@@ -736,13 +779,16 @@ def from_tile_service(
 
     r_rows, g_rows, b_rows, a_rows = [], [], [], []
     e: Extent | None = None
+    in_crs = CRS.from_epsg(4326)
+    out_crs = CRS.from_epsg(3857)
     failed_tile = np.full((256, 256), np.nan)
 
     for i, row in enumerate(rows):
         r_columns, g_columns, b_columns, a_columns = [], [], [], []
         for j, (x, y, z, q, xmin, ymin, xmax, ymax) in enumerate(row):
             logger.info(f"Processing tile {i * len(row) + j + 1} of {sum(len(r) for r in rows)}...")
-            e = e.union(Extent(xmin, ymin, xmax, ymax)) if e else Extent(xmin, ymin, xmax, ymax)
+            _e = Extent(xmin, ymin, xmax, ymax, out_crs)
+            e = e.union(_e) if e else _e
             url = url_template.format(x=x, y=y, z=z, q=q)
             try:
                 data = http_get(url, cache_dir=cache_dir)
@@ -771,12 +817,12 @@ def from_tile_service(
         if preserve_alpha:
             a_rows.append(a_columns)
 
-    s = stack([grid(np.block(r), e, 3857) for r in (r_rows, g_rows, b_rows)])
+    s = stack([grid(np.block(r), e) for r in (r_rows, g_rows, b_rows)])
 
     if preserve_alpha:
-        alpha = grid(np.block(a_rows), e, 3857) < 1
+        alpha = grid(np.block(a_rows), e) < 1
         s = s.each(lambda g: g.set_nan(alpha))
 
-    s = s.clip(Extent(*extent).project(4326, 3857))
+    s = s.clip(Extent(*extent, crs=in_crs).project(out_crs))
 
     return s if preserve_alpha else s.type("uint8")
