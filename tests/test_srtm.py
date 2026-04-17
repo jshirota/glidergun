@@ -7,6 +7,7 @@ import rasterio
 
 from glidergun import Grid, con, grid, mosaic
 from glidergun.grid import _to_uint8_range
+from tests.utils import extents_equal
 
 
 @pytest.fixture(scope="session")
@@ -97,14 +98,14 @@ def test_buffer_4(dem):
 def test_clip(dem):
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin + 0.02, ymin + 0.03, xmax - 0.04, ymax - 0.05
-    for a, b in zip(dem.clip(extent).extent, extent, strict=False):
+    for a, b in zip(dem.clip(extent).extent, extent, strict=True):
         assert pytest.approx(a, 0.001) == b
 
 
 def test_clip_2(dem):
     xmin, ymin, xmax, ymax = dem.extent
     extent = xmin - 0.02, ymin - 0.03, xmax + 0.04, ymax + 0.05
-    for a, b in zip(dem.clip(extent).extent, extent, strict=False):
+    for a, b in zip(dem.clip(extent).extent, extent, strict=True):
         assert pytest.approx(a, 0.001) == b
 
 
@@ -450,9 +451,9 @@ def test_tan(dem):
 def test_round(dem):
     g = dem.resample(0.01).randomize()
     points = g.to_points()
-    for p1, p2 in zip(points, g.round().to_points(), strict=False):
+    for p1, p2 in zip(points, g.round().to_points(), strict=True):
         assert pytest.approx(p2[2], 0.01) == round(p1[2])
-    for p1, p2 in zip(points, g.round(3).to_points(), strict=False):
+    for p1, p2 in zip(points, g.round(3).to_points(), strict=True):
         assert pytest.approx(p2[2], 0.01) == round(p1[2], 3)
 
 
@@ -479,7 +480,7 @@ def save(g1: Grid, file: str, strict: bool = True):
     g2 = grid(file_path)
     if strict:
         assert g2.sha256 == g1.sha256
-    assert g2.extent == g1.extent
+    assert extents_equal(g2.extent, g1.extent)
     shutil.rmtree(folder)
 
 

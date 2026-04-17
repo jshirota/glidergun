@@ -3,6 +3,8 @@ import pytest
 from rasterio.crs import CRS
 
 from glidergun import Extent, grid, stack
+from glidergun.utils import get_crs_name
+from tests.utils import extents_equal
 
 
 def test_create_stack_1():
@@ -41,7 +43,7 @@ def test_stack_single_grid():
 @pytest.fixture
 def sample_grids():
     data = np.random.rand(10, 10)
-    extent = Extent(0, 0, 10, 10)
+    extent = Extent(0, 0, 10, 10, CRS.from_epsg(3857))
     crs = CRS.from_epsg(4326)
     grid1 = grid(data, extent, crs)
     grid2 = grid(data * 2, extent, crs)
@@ -61,7 +63,7 @@ def test_stack_repr(sample_grids):
     s = stack([grid1, grid2])
     assert (
         repr(s)
-        == f"image: 10x10 float32 | crs: {grid1.crs} | count: 2 | rgb: (1, 2, 3) | cell: (1.0, 1.0) | extent: (0.0, 0.0, 10.0, 10.0)"  # noqa: E501
+        == f"image: 10x10 float32 | crs: {grid1.crs} {get_crs_name(grid1.crs)} | count: 2 | rgb: (1, 2, 3) | cell: (1.0, 1.0) | extent: (0.0, 0.0, 10.0, 10.0)"  # noqa: E501
     )
 
 
@@ -108,8 +110,8 @@ def test_stack_clip(sample_grids):
     grid1, grid2 = sample_grids
     s = stack([grid1, grid2])
     result = s.clip((2, 2, 8, 8))
-    assert result.grids[0].extent == Extent(2, 2, 8, 8)
-    assert result.grids[1].extent == Extent(2, 2, 8, 8)
+    assert extents_equal(result.grids[0].extent, Extent(2, 2, 8, 8, CRS.from_epsg(3857)))
+    assert extents_equal(result.grids[1].extent, Extent(2, 2, 8, 8, CRS.from_epsg(3857)))
 
 
 def test_stack_save(sample_grids, tmp_path):

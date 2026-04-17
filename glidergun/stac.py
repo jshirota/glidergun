@@ -10,12 +10,12 @@ except ImportError:  # Python < 3.11
 import requests
 from pystac.item import Item as PystacItem
 from rasterio.crs import CRS
-from shapely.geometry import box, shape
+from shapely.geometry import shape
 
 from glidergun.grid import Grid, standardize
 from glidergun.mosaic import mosaic
 from glidergun.stack import Stack, stack
-from glidergun.types import Extent
+from glidergun.types import BBox, Extent
 
 planetary_computer_url = "https://planetarycomputer.microsoft.com/api/stac/v1"
 
@@ -79,7 +79,7 @@ class Item(ItemBase, Generic[TGrid, TStack]):
 @overload
 def search(
     collection: Literal["landsat-c2-l2"],
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     query: dict | None = None,
     *,
     datetime: DateRange | None = None,
@@ -116,7 +116,7 @@ def search(
 @overload
 def search(
     collection: Literal["sentinel-2-l2a"],
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     query: dict | None = None,
     *,
     datetime: DateRange | None = None,
@@ -135,7 +135,7 @@ def search(
 @overload
 def search(
     collection: str,
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     query: dict | None = None,
     *,
     url: str = planetary_computer_url,
@@ -146,7 +146,7 @@ def search(
 
 def search(
     collection: str,
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     query: dict | None = None,
     *,
     url: str = planetary_computer_url,
@@ -155,8 +155,9 @@ def search(
     cloud_cover_percent: float | None = None,
 ):
     xmin, ymin, xmax, ymax = extent
-    search_extent = Extent(xmin, ymin, xmax, ymax)
-    search_polygon = box(xmin, ymin, xmax, ymax)
+    from_crs = CRS.from_epsg(4326)
+    search_extent = Extent(xmin, ymin, xmax, ymax, from_crs)
+    search_polygon = search_extent.to_polygon()
 
     json = {
         "bbox": list(extent),
@@ -177,7 +178,6 @@ def search(
     response.raise_for_status()
 
     features = []
-    from_crs = CRS.from_epsg(4326)
 
     for feature in response.json()["features"]:
         geometry = shape(feature["geometry"])
@@ -185,11 +185,11 @@ def search(
             if fully_contains_search_area:
                 data_extent = search_extent
             else:
-                data_extent = Extent(*search_polygon.intersection(geometry).bounds)
+                data_extent = Extent(*search_polygon.intersection(geometry).bounds, from_crs)
             to_crs = CRS.from_epsg(feature["properties"]["proj:epsg"])
             item = ItemBase.from_dict(feature)
             item.url = url
-            item.extent = data_extent.project(from_crs, to_crs)
+            item.extent = data_extent.project(to_crs)
             item.crs = to_crs
             features.append(item)
 
@@ -206,9 +206,7 @@ def to_iso_string(t: str | datetime | None) -> str:
     return t.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def search_mosaic(
-    url: str, collection: str, asset: str, extent: tuple[float, float, float, float] | list[float]
-) -> Grid:
+def search_mosaic(url: str, collection: str, asset: str, extent: BBox) -> Grid:
     items = search(collection, extent, url=url, fully_contains_search_area=False)
     if not items:
         raise ValueError(f"No items found for the given extent: {extent}")

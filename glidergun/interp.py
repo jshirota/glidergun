@@ -7,6 +7,7 @@ from numpy import ndarray
 from rasterio.crs import CRS
 
 from glidergun.literals import InterpolationKernel
+from glidergun.types import BBox
 
 if TYPE_CHECKING:
     from glidergun.grid import Grid
@@ -140,7 +141,7 @@ class Interpolation:
 def interpolate(
     interpolator_factory: Callable[[ndarray, ndarray], Any],
     points: Sequence[tuple[float, float, float]],
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     crs: int | str | CRS,
     cell_size: tuple[float, float] | float,
 ):

@@ -1,8 +1,10 @@
 import numpy as np
 import pytest
+from rasterio.crs import CRS
 from rasterio.transform import from_origin
 
 from glidergun import CellSize, Extent, grid
+from tests.utils import extents_equal
 
 
 @pytest.fixture
@@ -58,7 +60,7 @@ def test_ymax(sample_grid):
 
 
 def test_extent(sample_grid):
-    assert sample_grid.extent == Extent(0, 0, 3, 3)
+    assert extents_equal(sample_grid.extent, Extent(0, 0, 3, 3, CRS.from_epsg(3857)))
     assert isinstance(sample_grid.extent[0], float)
     assert isinstance(sample_grid.extent[1], float)
     assert isinstance(sample_grid.extent[2], float)

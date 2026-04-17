@@ -33,8 +33,8 @@ from glidergun.interp import Interpolation
 from glidergun.io import write_to_file
 from glidergun.literals import Basemap, BasemapUrl, ColorMap, DataType, ExtentResolution, ResamplingMethod
 from glidergun.plot import create_histogram, create_thumbnail
-from glidergun.types import CellSize, Chart, Extent, GridCore, PointValue, Scaler
-from glidergun.utils import format_type, get_crs, get_nodata_value, is_image_format, is_tile_url
+from glidergun.types import BBox, CellSize, Chart, Extent, GridCore, PointValue, Scaler
+from glidergun.utils import format_type, get_crs, get_crs_name, get_nodata_value, is_image_format, is_tile_url
 from glidergun.zonal import Zonal
 
 if TYPE_CHECKING:
@@ -70,7 +70,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
             + f"range: {self.min:.{d}f}~{self.max:.{d}f} | "
             + f"mean: {self.mean:.{d}f} | "
             + f"std: {self.std:.{d}f} | "
-            + f"crs: {self.crs} | "
+            + f"crs: {self.crs} {get_crs_name(self.crs)} | "
             + f"cell: {self.cell_size} | "
             + f"extent: {self.extent}"
         )
@@ -122,11 +122,11 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 
     @cached_property
     def extent(self) -> Extent:
-        return _extent(self.width, self.height, self.transform)
+        return _extent(self.width, self.height, self.transform, self.crs)
 
     @cached_property
     def extent_4326(self) -> Extent:
-        return self.extent.project(self.crs, 4326)
+        return self.extent.project(4326)
 
     @cached_property
     def mean(self):
@@ -155,7 +155,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
     @cached_property
     def bins(self) -> dict[float, int]:
         unique, counts = np.unique(self.data, return_counts=True)
-        return dict(sorted(zip(map(float, unique), map(int, counts), strict=False)))
+        return dict(sorted(zip(map(float, unique), map(int, counts), strict=True)))
 
     @cached_property
     def sha256(self) -> str:
@@ -376,7 +376,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         """Round per cell to `decimals`."""
         return self.local(lambda a: np.round(a, decimals))
 
-    def georeference(self, extent: tuple[float, float, float, float] | list[float], crs: int | str | CRS | None = None):
+    def georeference(self, extent: BBox, crs: int | str | CRS | None = None):
         """Assign extent and CRS to the current data without resampling."""
         return grid(self.data, extent, get_crs(crs) if crs else self.crs)
 
@@ -423,10 +423,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         )
 
     def _resample(
-        self,
-        extent: tuple[float, float, float, float] | list[float],
-        cell_size: tuple[float, float],
-        resampling: Resampling | ResamplingMethod,
+        self, extent: BBox, cell_size: tuple[float, float], resampling: Resampling | ResamplingMethod
     ) -> "Grid":
         xmin, ymin, xmax, ymax = extent
         xoff = (xmin - self.xmin) / self.transform.a
@@ -438,7 +435,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         height = (ymax - ymin) / abs(self.transform.e) / scaling_y
         return self._reproject(transform, self.crs, width, height, resampling)
 
-    def clip(self, extent: tuple[float, float, float, float] | list[float], preserve: bool = True):
+    def clip(self, extent: BBox, preserve: bool = True):
         """Clip to the given extent (same CRS), preserving cell size."""
         if preserve:
             extent = _adjust_extent(extent, self.transform)
@@ -685,7 +682,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         col_min, col_max = np.where(cols)[0][[0, -1]]
         data = self.data[row_min : row_max + 1, col_min : col_max + 1]
         transform = self.transform * rasterio.Affine.translation(col_min, row_min)
-        return _extent(data.shape[1], data.shape[0], transform)
+        return _extent(data.shape[1], data.shape[0], transform, self.crs)
 
     def _xs(self):
         offset = self.cell_size.x / 2
@@ -946,7 +943,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 @overload
 def grid(
     data: str,
-    extent: tuple[float, float, float, float] | list[float] | None = None,
+    extent: BBox | None = None,
     crs: int | str | CRS | None = None,
     cell_size: tuple[float, float] | float | None = None,
     index: int = 1,
@@ -972,7 +969,7 @@ def grid(
 @overload
 def grid(  # type: ignore
     data: Literal["cop-dem-glo-30", "cop-dem-glo-90"],
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
 ) -> Grid:
     """Creates a new grid from cop-dem-glo-30 based on the given extent.
 
@@ -993,7 +990,7 @@ def grid(  # type: ignore
 @overload
 def grid(  # type: ignore
     data: DatasetReader,
-    extent: tuple[float, float, float, float] | list[float] | None = None,
+    extent: BBox | None = None,
     crs: int | str | CRS | None = None,
     cell_size: tuple[float, float] | float | None = None,
     index: int = 1,
@@ -1021,7 +1018,7 @@ def grid(  # type: ignore
 @overload
 def grid(
     data: bytes,
-    extent: tuple[float, float, float, float] | list[float] | None = None,
+    extent: BBox | None = None,
     crs: int | str | CRS | None = None,
     cell_size: tuple[float, float] | float | None = None,
     index: int = 1,
@@ -1047,7 +1044,7 @@ def grid(
 @overload
 def grid(  # type: ignore
     data: MemoryFile,
-    extent: tuple[float, float, float, float] | list[float] | None = None,
+    extent: BBox | None = None,
     crs: int | str | CRS | None = None,
     cell_size: tuple[float, float] | float | None = None,
     index: int = 1,
@@ -1073,7 +1070,7 @@ def grid(  # type: ignore
 @overload
 def grid(
     data: ndarray,
-    extent: tuple[float, float, float, float] | list[float] | Affine | None = None,
+    extent: BBox | Affine | None = None,
     crs: int | str | CRS = 4326,
 ) -> Grid:
     """Creates a new grid from an array.
@@ -1096,7 +1093,7 @@ def grid(
 @overload
 def grid(
     data: tuple[int, int],
-    extent: tuple[float, float, float, float] | list[float] | None = None,
+    extent: BBox | None = None,
     crs: int | str | CRS = 4326,
 ) -> Grid:
     """Creates a new grid from a tuple (width, height).
@@ -1119,7 +1116,7 @@ def grid(
 @overload
 def grid(
     data: int | float,
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     crs: int | str | CRS,
     cell_size: tuple[float, float] | float,
 ) -> Grid:
@@ -1144,7 +1141,7 @@ def grid(
 @overload
 def grid(
     data: Iterable[tuple[BaseGeometry, float] | tuple[float, float, float]],
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     crs: int | str | CRS,
     cell_size: tuple[float, float] | float,
 ) -> Grid:
@@ -1169,7 +1166,7 @@ def grid(
 @overload
 def grid(
     data: Basemap | str,
-    extent: tuple[float, float, float, float] | list[float] = (-179.999, -85.0511, 179.999, 85.0511),
+    extent: BBox = (-179.999, -85.0511, 179.999, 85.0511),
     max_tiles: int = 10,
     cache_dir: str | None = "~/.glidergun/cache",
     preserve_alpha: bool = False,
@@ -1178,7 +1175,7 @@ def grid(
 
     Args:
         data (str): Tile service url template with {x}{y}{z} or {q} placeholders.
-        extent (tuple[float, float, float, float] | list[float]): Map extent used to clip the raster.
+        extent (BBox): Map extent used to clip the raster.
         max_tiles (int, optional): Maximum number of tiles to load.  Defaults to 10.
         cache_dir (str | None, optional): Directory to cache downloaded tiles.  Defaults to "~/.glidergun/cache".
         preserve_alpha (bool, optional): Whether to preserve the alpha channel.  Defaults to False.
@@ -1202,8 +1199,8 @@ def grid(  # type: ignore
     | tuple[int, int]
     | int
     | float
-    | Iterable[tuple[float, float, float] | tuple[BaseGeometry, float]],
-    extent: tuple[float, float, float, float] | list[float] | Affine | None = None,
+    | Iterable[tuple[BaseGeometry, float] | tuple[float, float, float]],
+    extent: BBox | Affine | None = None,
     crs: int | str | CRS | None = None,
     cell_size: tuple[float, float] | float | None = None,
     index: int = 1,
@@ -1251,7 +1248,7 @@ def grid(  # type: ignore
 
 def from_dataset(
     dataset: DatasetReader,
-    extent: tuple[float, float, float, float] | list[float] | None,
+    extent: BBox | None,
     crs: int | str | CRS | None,
     cell_size: tuple[float, float] | float | None,
     index: int,
@@ -1267,8 +1264,8 @@ def from_dataset(
         extent = _adjust_extent(extent, dataset.transform)
         w = int(dataset.profile.data["width"])
         h = int(dataset.profile.data["height"])
-        e1 = Extent(*extent)
-        e2 = _extent(w, h, dataset.transform)
+        e1 = Extent(*extent, dataset.crs)
+        e2 = _extent(w, h, dataset.transform, dataset.crs)
         e = e1.intersect(e2)
         left = (e.xmin - e2.xmin) / (e2.xmax - e2.xmin) * w
         right = (e.xmax - e2.xmin) / (e2.xmax - e2.xmin) * w
@@ -1298,20 +1295,13 @@ def from_dataset(
     return g
 
 
-def from_stac(
-    collection: str,
-    extent: tuple[float, float, float, float] | list[float],
-):
+def from_stac(collection: str, extent: BBox):
     from glidergun.stac import planetary_computer_url, search_mosaic
 
     return search_mosaic(planetary_computer_url, collection, "data", extent)
 
 
-def from_ndarray(
-    data: ndarray,
-    extent: tuple[float, float, float, float] | list[float] | Affine,
-    crs: int | str | CRS,
-):
+def from_ndarray(data: ndarray, extent: BBox | Affine, crs: int | str | CRS):
     if isinstance(extent, Affine):
         transform = extent
     else:
@@ -1321,12 +1311,7 @@ def from_ndarray(
     return Grid(format_type(data), transform, get_crs(crs))
 
 
-def from_constant(
-    data: int | float,
-    extent: tuple[float, float, float, float] | list[float],
-    crs: int | str | CRS,
-    cell_size: tuple[float, float] | float,
-):
+def from_constant(data: int | float, extent: BBox, crs: int | str | CRS, cell_size: tuple[float, float] | float):
     cell_size = CellSize(cell_size, cell_size) if isinstance(cell_size, (int | float)) else CellSize(*cell_size)
     xmin, ymin, xmax, ymax = extent
     width = int((xmax - xmin) / cell_size.x + 0.5)
@@ -1339,7 +1324,7 @@ def from_constant(
 
 def from_shapes(
     shapes: Iterable[tuple[float, float, float] | tuple[BaseGeometry, float]],
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     crs: int | str | CRS,
     cell_size: tuple[float, float] | float,
 ):
@@ -1347,7 +1332,7 @@ def from_shapes(
     return g.rasterize(shapes)
 
 
-def _adjust_extent(extent: tuple[float, float, float, float] | list[float], transform: Affine):
+def _adjust_extent(extent: BBox, transform: Affine):
     xmin, ymin, xmax, ymax = extent
     window = from_bounds(xmin, ymin, xmax, ymax, transform)
     window = window.round_offsets().round_lengths()
@@ -1359,10 +1344,10 @@ def _adjust_extent(extent: tuple[float, float, float, float] | list[float], tran
     return xmin2, ymin2, xmax2, ymax2
 
 
-def _extent(width, height, transform) -> Extent:
+def _extent(width, height, transform, crs) -> Extent:
     x0, y0, *_ = transform * (0, 0)
     x1, y1, *_ = transform * (width, height)
-    return Extent(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+    return Extent(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1), crs)
 
 
 def _to_uint8_range(grid: Grid):
@@ -1478,7 +1463,7 @@ def maximum(*grids: Grid) -> Grid:
 
 def idw(
     points: Sequence[tuple[float, float, float]],
-    extent: tuple[float, float, float, float] | list[float],
+    extent: BBox,
     crs: int | str | CRS,
     cell_size: tuple[float, float] | float,
     radius: float | None = None,
@@ -1497,6 +1482,7 @@ def idw(
                 g.extent.ymin - radius,
                 g.extent.xmax + radius,
                 g.extent.ymax + radius,
+                g.crs,
             )
             points_adjusted = [p for p in points if e.intersects((p[0], p[1], p[0], p[1]))]
             if not points_adjusted:
@@ -1504,7 +1490,7 @@ def idw(
         else:
             points_adjusted = points
 
-        x, y, v = zip(*points_adjusted, strict=False)
+        x, y, v = zip(*points_adjusted, strict=True)
         values = np.array(v)
         coords = g._coords()
         xi, yi = coords[:, 0], coords[:, 1]

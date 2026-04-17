@@ -1,68 +1,71 @@
+from rasterio.crs import CRS
+
 from glidergun import Extent, grid
+from tests.utils import extents_equal
 
 
 def test_extent_1():
     g1 = grid((40, 30), (0, 0, 4, 3))
     g2 = grid((40, 30), (0, 0, 4, 4))
     g3 = g1 + g2
-    assert g1.extent == g3.extent
+    assert extents_equal(g1.extent, g3.extent)
 
 
 def test_extent_2():
     g1 = grid((40, 30), (0, 0, 4, 3))
     g2 = grid((40, 30), (0, 0, 5, 3))
     g3 = g1 + g2
-    assert g1.extent == g3.extent
+    assert extents_equal(g1.extent, g3.extent)
 
 
 def test_extent_3():
     g1 = grid((40, 40), (0, 0, 4, 3))
     g2 = grid((40, 30), (0, 0, 4, 4))
     g3 = g1 + g2
-    assert g1.extent == g3.extent
+    assert extents_equal(g1.extent, g3.extent)
 
 
 def test_extent_4():
     g1 = grid((40, 30), (0, 0, 4, 3))
     g2 = grid((40, 40), (0, 0, 5, 3))
     g3 = g1 + g2
-    assert g1.extent == g3.extent
+    assert extents_equal(g1.extent, g3.extent)
 
 
 def test_extent_intersect():
-    e1 = Extent(0, 0, 4, 4)
-    e2 = Extent(2, 2, 6, 6)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
+    e2 = Extent(2, 2, 6, 6, CRS.from_epsg(3857))
     result = e1.intersect(e2)
-    expected = Extent(2, 2, 4, 4)
-    assert result == expected
+    expected = Extent(2, 2, 4, 4, CRS.from_epsg(3857))
+    assert extents_equal(result, expected)
 
 
 def test_extent_union():
-    e1 = Extent(0, 0, 4, 4)
-    e2 = Extent(2, 2, 6, 6)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
+    e2 = Extent(2, 2, 6, 6, CRS.from_epsg(3857))
     result = e1.union(e2)
-    expected = Extent(0, 0, 6, 6)
-    assert result == expected
+    expected = Extent(0, 0, 6, 6, CRS.from_epsg(3857))
+    assert extents_equal(result, expected)
 
 
 def test_extent_and_operator():
-    e1 = Extent(0, 0, 4, 4)
-    e2 = Extent(2, 2, 6, 6)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
+    e2 = Extent(2, 2, 6, 6, CRS.from_epsg(3857))
     result = e1 & e2
-    expected = Extent(2, 2, 4, 4)
-    assert result == expected
+    expected = Extent(2, 2, 4, 4, CRS.from_epsg(3857))
+    assert extents_equal(result, expected)
 
 
 def test_extent_or_operator():
-    e1 = Extent(0, 0, 4, 4)
-    e2 = Extent(2, 2, 6, 6)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
+    e2 = Extent(2, 2, 6, 6, CRS.from_epsg(3857))
     result = e1 | e2
-    expected = Extent(0, 0, 6, 6)
-    assert result == expected
+    expected = Extent(0, 0, 6, 6, CRS.from_epsg(3857))
+    assert extents_equal(result, expected)
 
 
 def test_extent_contains():
-    e1 = Extent(0, 0, 4, 4)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
     e2 = (1, 1, 3, 3)
     assert e1.contains(e2) is True
     e3 = (0, 0, 5, 5)
@@ -70,13 +73,13 @@ def test_extent_contains():
 
 
 def test_extent_not_contains():
-    e1 = Extent(0, 0, 4, 4)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
     e2 = (5, 5, 6, 6)
     assert e1.contains(e2) is False
 
 
 def test_extent_intersects():
-    e1 = Extent(0, 0, 4, 4)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
     e2 = (2, 2, 6, 6)
     assert e1.intersects(e2) is True
     e3 = (5, 5, 7, 7)
@@ -84,38 +87,38 @@ def test_extent_intersects():
 
 
 def test_extent_not_intersects():
-    e1 = Extent(0, 0, 4, 4)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
     e2 = (5, 5, 6, 6)
     assert e1.intersects(e2) is False
 
 
 def test_intersects_but_not_contains():
-    e1 = Extent(0, 0, 4, 4)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
     e2 = (3, 3, 5, 5)
     assert e1.intersects(e2) is True
     assert e1.contains(e2) is False
 
 
 def test_adjust():
-    e1 = Extent(0, 0, 4, 4)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
     e2 = e1.adjust(-1, -1, 1, 1)
-    expected = Extent(-1, -1, 5, 5)
-    assert e2 == expected
+    expected = Extent(-1, -1, 5, 5, CRS.from_epsg(3857))
+    assert extents_equal(e2, expected)
 
 
 def test_buffer():
-    e1 = Extent(0, 0, 4, 4)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
     e2 = e1.buffer(1)
-    expected = Extent(-1, -1, 5, 5)
+    expected = Extent(-1, -1, 5, 5, CRS.from_epsg(3857))
     assert e2 == expected
     e3 = e1.buffer(0.5)
-    expected2 = Extent(-0.5, -0.5, 4.5, 4.5)
+    expected2 = Extent(-0.5, -0.5, 4.5, 4.5, CRS.from_epsg(3857))
     assert e3 == expected2
     e4 = e1.buffer(0)
-    expected3 = Extent(0, 0, 4, 4)
+    expected3 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
     assert e4 == expected3
     e5 = e1.buffer(-1)
-    expected4 = Extent(1, 1, 3, 3)
+    expected4 = Extent(1, 1, 3, 3, CRS.from_epsg(3857))
     assert e5 == expected4 == expected4
     try:
         e1.buffer(-3)
@@ -124,12 +127,12 @@ def test_buffer():
 
 
 def test_tiles():
-    e1 = Extent(0, 0, 4, 4)
+    e1 = Extent(0, 0, 4, 4, CRS.from_epsg(3857))
     tiles = e1.tiles(2, 2)
     expected = [
-        Extent(0, 0, 2, 2),
-        Extent(0, 2, 2, 4),
-        Extent(2, 0, 4, 2),
-        Extent(2, 2, 4, 4),
+        Extent(0, 0, 2, 2, CRS.from_epsg(3857)),
+        Extent(0, 2, 2, 4, CRS.from_epsg(3857)),
+        Extent(2, 0, 4, 2, CRS.from_epsg(3857)),
+        Extent(2, 2, 4, 4, CRS.from_epsg(3857)),
     ]
     assert tiles == expected

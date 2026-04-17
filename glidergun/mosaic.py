@@ -11,7 +11,7 @@ from rasterio.transform import Affine, array_bounds
 
 from glidergun.grid import Grid, grid
 from glidergun.stack import Stack, stack
-from glidergun.types import Extent
+from glidergun.types import BBox, Extent
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +34,16 @@ class Mosaic:
         assert len(count_set) == 1, "Inconsistent number of bands"
         assert len(crs_set) == 1, "Inconsistent CRS"
         self.crs = crs_set.pop()
-        self.files: dict[str, Extent] = {f: Extent(*array_bounds(p.height, p.width, p.transform)) for f, p in profiles}
+        self.files: dict[str, Extent] = {
+            f: Extent(*array_bounds(p.height, p.width, p.transform), p.crs) for f, p in profiles
+        }
         self.blend = blend
         self.extent = Extent(
             min(e.xmin for e in self.files.values()),
             min(e.ymin for e in self.files.values()),
             max(e.xmax for e in self.files.values()),
             max(e.ymax for e in self.files.values()),
+            self.crs,
         )
 
     def _read_profiles(self, *files: str):
@@ -50,7 +53,7 @@ class Mosaic:
                 with rasterio.open(f) as dataset:
                     yield f, SimpleNamespace(**dataset.profile)
 
-    def _read(self, extent: tuple[float, float, float, float] | list[float], index: int):
+    def _read(self, extent: BBox, index: int):
         for i, (f, e) in enumerate(self.files.items()):
             logger.info(f"Processing tile {i + 1} of {len(self.files)}...")
             try:
@@ -63,7 +66,7 @@ class Mosaic:
         self,
         width: float,
         height: float,
-        clip_extent: tuple[float, float, float, float] | list[float] | None = None,
+        clip_extent: BBox | None = None,
     ):
         """Iterate over clipped mosaicked tiles of the requested size.
 
@@ -75,19 +78,19 @@ class Mosaic:
         Yields:
             Grid: Each tile as a `Grid`.
         """
-        extent = Extent(*clip_extent) if clip_extent else self.extent
+        extent = Extent(*clip_extent, crs=self.crs) if clip_extent else self.extent
         for e in extent.tiles(width, height):
             g = self.clip(e)
             assert g
             yield g
 
     @overload
-    def clip(self, extent: tuple[float, float, float, float] | list[float], index: int = 1) -> Grid | None: ...
+    def clip(self, extent: BBox, index: int = 1) -> Grid | None: ...
 
     @overload
-    def clip(self, extent: tuple[float, float, float, float] | list[float], index: tuple[int, ...]) -> Stack | None: ...
+    def clip(self, extent: BBox, index: tuple[int, ...]) -> Stack | None: ...
 
-    def clip(self, extent: tuple[float, float, float, float] | list[float], index=None):
+    def clip(self, extent: BBox, index=None):
         try:
             if not index or isinstance(index, int):
                 return mosaic(*(g for g in self._read(extent, index or 1) if g), blend=self.blend)

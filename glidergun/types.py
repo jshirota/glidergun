@@ -1,5 +1,5 @@
 import io
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import NamedTuple, Protocol
 
@@ -12,6 +12,8 @@ from rasterio.crs import CRS
 from rasterio.transform import Affine
 from shapely import box
 
+from glidergun.utils import get_crs
+
 
 @dataclass(frozen=True)
 class GridCore:
@@ -20,11 +22,32 @@ class GridCore:
     crs: CRS
 
 
-class Extent(NamedTuple):
+@dataclass(frozen=True)
+class Extent:
     xmin: float
     ymin: float
     xmax: float
     ymax: float
+    crs: CRS
+
+    def __init__(self, xmin: float, ymin: float, xmax: float, ymax: float, crs: int | str | CRS) -> None:
+        object.__setattr__(self, "xmin", xmin)
+        object.__setattr__(self, "ymin", ymin)
+        object.__setattr__(self, "xmax", xmax)
+        object.__setattr__(self, "ymax", ymax)
+        object.__setattr__(self, "crs", get_crs(crs))
+
+    def __iter__(self):
+        yield self.xmin
+        yield self.ymin
+        yield self.xmax
+        yield self.ymax
+
+    def __len__(self):
+        return 4
+
+    def __getitem__(self, i):
+        return (self.xmin, self.ymin, self.xmax, self.ymax)[i]
 
     @property
     def width(self):
@@ -43,26 +66,30 @@ class Extent(NamedTuple):
         e = 1e-9
         return self.xmax - self.xmin > e and self.ymax - self.ymin > e
 
-    def contains(self, extent: tuple[float, float, float, float] | list[float]):
+    def contains(self, extent: "BBox"):
         xmin, ymin, xmax, ymax = extent
         return self.xmin <= xmin and self.xmax >= xmax and self.ymin <= ymin and self.ymax >= ymax
 
-    def intersects(self, extent: tuple[float, float, float, float] | list[float]):
+    def intersects(self, extent: "BBox"):
         xmin, ymin, xmax, ymax = extent
         return self.xmin < xmax and self.xmax > xmin and self.ymin < ymax and self.ymax > ymin
 
-    def intersect(self, extent: tuple[float, float, float, float] | list[float]):
-        return Extent(*[f(x) for f, x in zip((max, max, min, min), zip(self, extent, strict=False), strict=False)])
+    def intersect(self, extent: "BBox"):
+        return Extent(
+            *[f(x) for f, x in zip((max, max, min, min), zip(self, extent, strict=True), strict=True)], crs=self.crs
+        )
 
-    def union(self, extent: tuple[float, float, float, float] | list[float]):
-        return Extent(*[f(x) for f, x in zip((min, min, max, max), zip(self, extent, strict=False), strict=False)])
+    def union(self, extent: "BBox"):
+        return Extent(
+            *[f(x) for f, x in zip((min, min, max, max), zip(self, extent, strict=True), strict=True)], crs=self.crs
+        )
 
-    def project(self, from_crs: int | str | CRS, to_crs: int | str | CRS):
+    def project(self, crs: int | str | CRS):
         from glidergun.utils import project
 
-        xmin, ymin = project(self.xmin, self.ymin, from_crs, to_crs)
-        xmax, ymax = project(self.xmax, self.ymax, from_crs, to_crs)
-        return Extent(xmin, ymin, xmax, ymax)
+        xmin, ymin = project(self.xmin, self.ymin, self.crs, crs)
+        xmax, ymax = project(self.xmax, self.ymax, self.crs, crs)
+        return Extent(xmin, ymin, xmax, ymax, crs)
 
     def tiles(self, width: float, height: float):
         x_edges = np.arange(self.xmin, self.xmax, width)
@@ -70,15 +97,15 @@ class Extent(NamedTuple):
         x_max_edges = x_edges + width
         y_max_edges = y_edges + height
         extents: list[Extent] = []
-        for xmin, xmax in zip(x_edges, x_max_edges, strict=False):
-            for ymin, ymax in zip(y_edges, y_max_edges, strict=False):
-                extent = Extent(float(xmin), float(ymin), float(xmax), float(ymax)) & self
+        for xmin, xmax in zip(x_edges, x_max_edges, strict=True):
+            for ymin, ymax in zip(y_edges, y_max_edges, strict=True):
+                extent = Extent(float(xmin), float(ymin), float(xmax), float(ymax), self.crs) & self
                 if extent.is_valid:
                     extents.append(extent)
         return extents
 
     def adjust(self, xmin: float = 0.0, ymin: float = 0.0, xmax: float = 0.0, ymax: float = 0.0):
-        extent = Extent(self.xmin + xmin, self.ymin + ymin, self.xmax + xmax, self.ymax + ymax)
+        extent = Extent(self.xmin + xmin, self.ymin + ymin, self.xmax + xmax, self.ymax + ymax, self.crs)
         if not extent.is_valid:
             raise ValueError(f"Adjusted extent is not valid: {extent}")
         return extent
@@ -93,7 +120,7 @@ class Extent(NamedTuple):
         return self.adjust(x_shift, y_shift, -x_shift, -y_shift)
 
     def to_polygon(self):
-        return box(*self)
+        return box(self.xmin, self.ymin, self.xmax, self.ymax)
 
     def __repr__(self):
         return show(self)
@@ -102,6 +129,9 @@ class Extent(NamedTuple):
     __rand__ = __and__
     __or__ = union
     __ror__ = __or__
+
+
+BBox = Extent | tuple[float, float, float, float] | list[float]
 
 
 class CellSize(NamedTuple):
@@ -153,5 +183,5 @@ class Chart:
             return buffer.read()
 
 
-def show(obj: tuple[float, ...]) -> str:
+def show(obj: Iterable[float]) -> str:
     return f"({', '.join(str(round(n, 6)) for n in obj)})"

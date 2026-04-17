@@ -22,35 +22,35 @@ def test_extract_bands(sentinel):
 
 def test_op_mul(sentinel):
     s = sentinel * 1000
-    for g1, g2 in zip(sentinel.grids, s.grids, strict=False):
+    for g1, g2 in zip(sentinel.grids, s.grids, strict=True):
         assert pytest.approx(g2.min, 0.001) == g1.min * 1000
         assert pytest.approx(g2.max, 0.001) == g1.max * 1000
 
 
 def test_op_div(sentinel):
     s = sentinel / 1000
-    for g1, g2 in zip(sentinel.grids, s.grids, strict=False):
+    for g1, g2 in zip(sentinel.grids, s.grids, strict=True):
         assert pytest.approx(g2.min, 0.001) == g1.min / 1000
         assert pytest.approx(g2.max, 0.001) == g1.max / 1000
 
 
 def test_op_add(sentinel):
     s = sentinel + 1000
-    for g1, g2 in zip(sentinel.grids, s.grids, strict=False):
+    for g1, g2 in zip(sentinel.grids, s.grids, strict=True):
         assert pytest.approx(g2.min, 0.001) == g1.min + 1000
         assert pytest.approx(g2.max, 0.001) == g1.max + 1000
 
 
 def test_op_sub(sentinel):
     s = sentinel - 1000
-    for g1, g2 in zip(sentinel.grids, s.grids, strict=False):
+    for g1, g2 in zip(sentinel.grids, s.grids, strict=True):
         assert pytest.approx(g2.min, 0.001) == g1.min - 1000
         assert pytest.approx(g2.max, 0.001) == g1.max - 1000
 
 
 def test_percent_clip(sentinel):
     s = sentinel.percent_clip(1, 99)
-    for g1, g2 in zip(sentinel.grids, s.grids, strict=False):
+    for g1, g2 in zip(sentinel.grids, s.grids, strict=True):
         assert pytest.approx(g2.min, 0.001) == g1.percentile(1)
         assert pytest.approx(g2.max, 0.001) == g1.percentile(99)
 

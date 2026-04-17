@@ -7,12 +7,31 @@ from rasterio.warp import transform
 
 
 def get_crs(crs: int | str | CRS):
+    if isinstance(crs, int):
+        try:
+            return CRS.from_epsg(crs)
+        except Exception:
+            pass
+        try:
+            return CRS.from_string(f"ESRI:{crs}")
+        except Exception as ex:
+            raise ValueError(f"Unknown CRS code: {crs}") from ex
+
     if isinstance(crs, str):
+        if crs.isdigit():
+            return get_crs(int(crs))
         try:
             return CRS.from_string(crs)
-        except Exception:
-            return CRS.from_wkt(crs)
-    return CRS.from_epsg(crs) if isinstance(crs, int) else crs
+        except Exception as ex:
+            raise ValueError(f"Invalid CRS string: {crs}") from ex
+    return crs
+
+
+def get_crs_name(crs: int | str | CRS) -> str:
+    try:
+        return get_crs(crs).to_wkt().split('"')[1]
+    except Exception:
+        return "Unknown"
 
 
 def project(x: float, y: float, from_crs: int | str | CRS, to_crs: int | str | CRS):
