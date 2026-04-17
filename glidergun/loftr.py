@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from affine import Affine
 
-from glidergun.grid import Grid, grid
+from glidergun.grid import Grid, from_ndarray
 from glidergun.stack import Stack, stack
 
 T = TypeVar("T", bound=Grid | Stack)
@@ -334,11 +334,11 @@ def georeference_to_reference(
 
     valid: np.ndarray = valid_mask.astype(np.float32)
     valid[valid == 0] = np.nan
-    common_extent = grid(valid, output_transform, reference.crs).data_extent
+    common_extent = from_ndarray(valid, output_transform, crs=reference.crs).data_extent
 
     grids = []
     for c in (r, g, b):
-        x = grid(c, output_transform, reference.crs)
+        x = from_ndarray(c, output_transform, crs=reference.crs)
         grids.append(x.clip(common_extent))
 
     result = stack(grids)

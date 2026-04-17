@@ -1,5 +1,7 @@
 import math
 
+from glidergun.types import BBox
+
 
 def coords_to_quadkey(lon: float, lat: float, zoom: int):
     n = 2**zoom
@@ -53,14 +55,14 @@ def tile_to_quadkey(x: int, y: int, zoom: int):
     return quadkey
 
 
-def get_tile_count_at_zoom(extent: tuple[float, float, float, float] | list[float], zoom: int):
+def get_tile_count_at_zoom(extent: BBox, zoom: int):
     xmin, ymin, xmax, ymax = extent
     x1, y1, _ = quadkey_to_tile(coords_to_quadkey(xmin, ymin, zoom))
     x2, y2, _ = quadkey_to_tile(coords_to_quadkey(xmax, ymax, zoom))
     return (abs(x2 - x1) + 1) * (abs(y2 - y1) + 1)
 
 
-def get_rows_at_zoom(extent: tuple[float, float, float, float] | list[float], zoom: int):
+def get_rows_at_zoom(extent: BBox, zoom: int):
     xmin, ymin, xmax, ymax = extent
     x1, y1, _ = quadkey_to_tile(coords_to_quadkey(xmin, ymin, zoom))
     x2, y2, _ = quadkey_to_tile(coords_to_quadkey(xmax, ymax, zoom))
@@ -71,7 +73,7 @@ def get_rows_at_zoom(extent: tuple[float, float, float, float] | list[float], zo
     return rows
 
 
-def get_rows(extent: tuple[float, float, float, float] | list[float], max_tiles: int, max_zoom: int):
+def get_rows(extent: BBox, max_tiles: int, max_zoom: int):
     zoom = max_zoom
     while get_tile_count_at_zoom(extent, zoom) > max_tiles:
         zoom -= 1

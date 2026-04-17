@@ -6,6 +6,7 @@ from typing import IO, Any, Generic, TypeVar
 from shapely.geometry import Point, Polygon, mapping
 
 from glidergun.io import create_directory_for
+from glidergun.utils import add_to_map
 
 Geometry = Point | Polygon
 
@@ -53,3 +54,7 @@ class FeatureCollection(Generic[T]):
                 json.dump(d, f, **kwargs)
         else:
             json.dump(d, file, **kwargs)
+
+    def add_to_map(self, name: str | None = None):
+        """Add as a layer to the active map in ArcGIS or QGIS."""
+        add_to_map(self, name)

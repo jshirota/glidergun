@@ -2,19 +2,17 @@ from collections.abc import Iterable
 from functools import wraps
 from io import BytesIO
 
-from matplotlib import pyplot as plt
-from matplotlib.animation import ArtistAnimation
 from numpy import ndarray
 
 from glidergun.types import Chart
 
 
 def with_agg_backend(func):
-    import matplotlib
-    import matplotlib.pyplot as plt
-
     @wraps(func)
     def wrapped(*args, **kwargs):
+        import matplotlib
+        import matplotlib.pyplot as plt
+
         old_backend = plt.get_backend()
         matplotlib.use("Agg")
         try:
@@ -27,6 +25,8 @@ def with_agg_backend(func):
 
 @with_agg_backend
 def create_thumbnail(data, cmap=None, figsize: tuple[float, float] | None = (5, 5)) -> bytes:
+    from matplotlib import pyplot as plt
+
     with BytesIO() as buffer:
         figure = plt.figure(figsize=figsize, frameon=False)
         axes = figure.add_axes((0, 0, 1, 1))
@@ -40,6 +40,8 @@ def create_thumbnail(data, cmap=None, figsize: tuple[float, float] | None = (5, 
 @with_agg_backend
 def create_histogram(*data: tuple[dict[float, int], str]) -> Chart:
     """Build a histogram chart of value counts (NaN-aware)."""
+    from matplotlib import pyplot as plt
+
     figure, axes = plt.subplots()
     for bins, color in reversed(data):
         axes.bar(list(bins.keys()), list(bins.values()), color=color)
@@ -47,7 +49,10 @@ def create_histogram(*data: tuple[dict[float, int], str]) -> Chart:
 
 
 @with_agg_backend
-def create_animation(frames: Iterable[ndarray], cmap=None, interval: int = 200) -> ArtistAnimation:
+def create_animation(frames: Iterable[ndarray], cmap=None, interval: int = 200):
+    from matplotlib import pyplot as plt
+    from matplotlib.animation import ArtistAnimation
+
     first = next(iter(frames))
     n = 5 / first.shape[1]
     figsize = (first.shape[1] * n, first.shape[0] * n)

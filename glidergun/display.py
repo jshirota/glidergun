@@ -1,8 +1,7 @@
 from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any, Union
 
 import IPython
-from matplotlib.animation import ArtistAnimation
 
 from glidergun.grid import Grid
 from glidergun.literals import ColorMap
@@ -10,8 +9,11 @@ from glidergun.plot import create_animation
 from glidergun.sam import SamResult
 from glidergun.stack import Stack
 
+if TYPE_CHECKING:
+    from matplotlib.animation import ArtistAnimation
 
-def get_html(obj: Grid | Stack | ArtistAnimation | SamResult):
+
+def get_html(obj: Union[Grid, Stack, "ArtistAnimation", SamResult]):
     if isinstance(obj, ArtistAnimation):
         return f"<div>{obj.to_jshtml()}</div>"
     if isinstance(obj, SamResult):
@@ -26,6 +28,8 @@ def animate(grids: Iterable[Grid | Stack], cmap: ColorMap | Any = "gray", interv
 
 
 if ipython := IPython.get_ipython():  # type: ignore
+    from matplotlib.animation import ArtistAnimation
+
     formatters = ipython.display_formatter.formatters  # type: ignore
     formatter = formatters["text/html"]
     formatter.for_type(Grid, get_html)

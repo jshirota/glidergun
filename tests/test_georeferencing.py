@@ -8,7 +8,7 @@ from affine import Affine
 from rasterio.transform import from_origin
 
 import glidergun.loftr as georeferencing
-from glidergun import CellSize, grid
+from glidergun import grid
 from glidergun.loftr import georeference_to_reference
 
 
@@ -37,8 +37,8 @@ def _rotate_image_bound(image: np.ndarray, angle: float) -> np.ndarray:
 
 
 def test_georeference_to_reference_preserves_native_resolution(monkeypatch: pytest.MonkeyPatch):
-    source = grid(np.arange(16, dtype=np.float32).reshape(4, 4), from_origin(0, 4, 1, 1), 4326)
-    reference = grid(np.arange(100, dtype=np.float32).reshape(10, 10), from_origin(100, 200, 2, 2), 4326)
+    source = grid(np.arange(16, dtype=np.float32).reshape(4, 4), from_origin(0, 4, 1, 1))
+    reference = grid(np.arange(100, dtype=np.float32).reshape(10, 10), from_origin(100, 200, 2, 2))
     homography = np.array(
         [
             [0.5, 0.0, 3.0],
@@ -53,7 +53,7 @@ def test_georeference_to_reference_preserves_native_resolution(monkeypatch: pyte
 
     result = georeference_to_reference(source, reference)
 
-    assert result.cell_size == CellSize(1, 1)
+    assert result.cell_size == (1, 1)
     assert result.transform == Affine(1.0, 0.0, 106.0, 0.0, -1.0, 196.0)
     assert result.extent == pytest.approx((106.0, 192.0, 110.0, 196.0))
     assert result.data.shape == (4, 4)
