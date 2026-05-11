@@ -20,9 +20,24 @@ hillshade.save("hillshade.tif", "uint8")
 
 ### With Segment Anything Model (larger dependency download)
 
+**CPU-only:**
 ```bash
 pip install glidergun[torch]
 ```
+
+**GPU (NVIDIA CUDA 12.1):**
+
+With pip:
+```bash
+pip install --index-url https://download.pytorch.org/whl/cu121 glidergun[torch]
+```
+
+With uv:
+```bash
+uv pip install glidergun[torch]
+```
+
+Note: GPU acceleration requires Python 3.12 or 3.13. For other Python versions or different CUDA versions, see [PyTorch install guide](https://pytorch.org/get-started/locally/).
 
 ```python
 from glidergun import stack
