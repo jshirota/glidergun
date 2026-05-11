@@ -26,6 +26,10 @@ class SamResult:
     def to_geojson(self):
         return FeatureCollection((m.to_polygon(4326), {"label": m.label, "score": m.score}) for m in self.masks)
 
+    def add_to_map(self, name: str | None = None):
+        """Add as a layer to the active map in ArcGIS or QGIS."""
+        self.to_geojson().add_to_map(name)
+
 
 @dataclass(frozen=True, slots=True)
 class SamMask:

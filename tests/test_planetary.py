@@ -12,14 +12,14 @@ def test_sentinel_visual():
     assert i.datetime
     s = i.get("visual")
     assert len(s.grids) == 3
-    assert s.dtype == "uint8"
+    assert s.dtype == "float32"
 
     s.save("tests/output/temp/sentinel_test.tif")
     s2 = stack("tests/output/temp/sentinel_test.tif")
     assert s2.crs == s.crs
     assert extents_equal(s2.extent, s.extent)
     assert len(s2.grids) == 3
-    assert s2.dtype == "uint8"
+    assert s2.dtype == "float32"
 
     shutil.rmtree("tests/output/temp")
 

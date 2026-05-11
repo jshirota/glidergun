@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "glidergun"
-version = "0.9.158"
+version = "0.9.163"
 description = "Map Algebra with NumPy"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -57,10 +57,14 @@ dependencies = [
 
 [project.optional-dependencies]
 torch = [
-    "torch>=2.5.0; python_version == '3.12' or python_version == '3.13'",
     "torch>=2.0.0; python_version == '3.10' or python_version == '3.11'",
-    "torchvision>=0.20.0; python_version == '3.12' or python_version == '3.13'",
+    "torch>=2.5.0; python_version == '3.12'",
+    "torch>=2.6.0; python_version == '3.13'",
+    "torch>=2.11.0; python_version >= '3.14'",
     "torchvision>=0.15.0; python_version == '3.10' or python_version == '3.11'",
+    "torchvision>=0.20.0; python_version == '3.12'",
+    "torchvision>=0.21.0; python_version == '3.13'",
+    "torchvision>=0.26.0; python_version >= '3.14'",
     "kornia>=0.6.2; python_version == '3.10'",
     "kornia>=0.6.7; python_version == '3.11'",
     "kornia>=0.7.1; python_version == '3.12'",
@@ -80,12 +84,23 @@ dev = [
 ]
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu121" }
-torchvision = { index = "pytorch-cu121" }
+torch = [
+    { index = "pytorch-cu124", marker = "python_version < '3.14'" },
+    { index = "pytorch-cu126", marker = "python_version >= '3.14'" },
+]
+torchvision = [
+    { index = "pytorch-cu124", marker = "python_version < '3.14'" },
+    { index = "pytorch-cu126", marker = "python_version >= '3.14'" },
+]
 
 [[tool.uv.index]]
-name = "pytorch-cu121"
-url = "https://download.pytorch.org/whl/cu121"
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
 [[tool.uv.index]]

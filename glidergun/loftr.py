@@ -12,6 +12,10 @@ from glidergun.stack import Stack, stack
 T = TypeVar("T", bound=Grid | Stack)
 
 
+def _loftr_device() -> torch.device:
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 def _affine_matrix(transform: Affine) -> np.ndarray:
     return np.array(
         [
@@ -177,11 +181,15 @@ def _best_transform_with_scan(
     tile_size: int,
     tile_overlap: float,
     top_k: int,
+    device: torch.device | None = None,
 ) -> tuple[np.ndarray, int]:
     """Find best transform from candidate windows using LoFTR and RANSAC."""
 
+    if device is None:
+        device = torch.device("cpu")
+
     def to_tensor(im: np.ndarray):
-        return torch.from_numpy(im / 255.0).float()[None, None]
+        return torch.from_numpy(im / 255.0).float()[None, None].to(device)
 
     h_img, w_img = img_gray.shape[:2]
 
@@ -282,7 +290,10 @@ def georeference_to_reference(
         img = input.data.astype(np.uint8)  # type: ignore
         img_gray = img
 
+    device = _loftr_device()
     matcher = kornia.feature.LoFTR(pretrained="outdoor")
+    if hasattr(matcher, "to"):
+        matcher = matcher.to(device)
     h, _ = _best_transform_with_scan(
         img_gray,
         ref_norm,
@@ -291,6 +302,7 @@ def georeference_to_reference(
         tile_size=tile_size,
         tile_overlap=tile_overlap,
         top_k=top_k,
+        device=device,
     )
 
     h_img, w_img = img.shape[:2]

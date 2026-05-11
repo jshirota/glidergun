@@ -22,6 +22,7 @@ from rasterio.warp import Resampling
 from requests.exceptions import HTTPError
 from shapely.geometry.base import BaseGeometry
 
+from glidergun.gis import add_to_map
 from glidergun.grid import (
     Extent,
     Grid,
@@ -41,7 +42,7 @@ from glidergun.literals import Basemap, BasemapUrl, DataType, ExtentResolution, 
 from glidergun.plot import create_histogram, create_thumbnail
 from glidergun.quadkey import get_rows
 from glidergun.types import BBox, CellSize, Chart, Scaler
-from glidergun.utils import add_to_map, get_crs_name, get_driver, get_nodata_value, is_image_format, is_tile_url
+from glidergun.utils import get_crs_name, get_driver, get_nodata_value, is_image_format, is_tile_url
 
 logger = logging.getLogger(__name__)
 
@@ -467,7 +468,7 @@ class Stack:
         )
 
     @overload
-    def save(self, file: str, dtype: DataType | None = None) -> None:
+    def save(self, file: str, dtype: DataType | None = None, nodata: int | float | None = None) -> None:
         """Saves the stack to a file.
 
         Most commonly, `.tif` extension is used to save as a GeoTIFF (COG).
@@ -478,21 +479,25 @@ class Stack:
         Args:
             file (str): File path (e.g. "output.tif").
             dtype (DataType | None): Data type for saving (optional).
+            nodata (int | float | None): NoData value to use when saving (optional).
         """
         ...
 
     @overload
-    def save(self, file: MemoryFile, dtype: DataType | None, driver: str) -> None:
+    def save(self, file: MemoryFile, dtype: DataType | None, nodata: int | float | None, driver: str) -> None:
         """Saves the stack to a memory file.
 
         Args:
             file (MemoryFile): Memory file to save the stack to.
             dtype (DataType | None): Data type for saving (optional).
+            nodata (int | float | None): NoData value to use when saving (optional).
             driver (str): Rasterio driver name (optional).
         """
         ...
 
-    def save(self, file: str | MemoryFile, dtype: DataType | None = None, driver: str = ""):
+    def save(
+        self, file: str | MemoryFile, dtype: DataType | None = None, nodata: int | float | None = None, driver: str = ""
+    ):
         driver = driver or get_driver(file)
 
         if is_image_format(driver, file):
@@ -508,7 +513,7 @@ class Stack:
             if dtype is None:
                 dtype = grids[0].dtype
 
-        nodata = get_nodata_value(dtype)
+        nodata = get_nodata_value(dtype) if nodata is None else nodata
 
         if nodata is not None:
             grids = tuple(g.coalesce(nodata) for g in grids)

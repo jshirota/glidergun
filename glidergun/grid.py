@@ -27,20 +27,13 @@ from shapely.geometry.base import BaseGeometry
 
 from glidergun.focal import Focal
 from glidergun.geojson import FeatureCollection
+from glidergun.gis import add_to_map
 from glidergun.interp import Interpolation
 from glidergun.io import write_to_file
 from glidergun.literals import Basemap, BasemapUrl, ColorMap, DataType, ExtentResolution, ResamplingMethod
 from glidergun.plot import create_histogram, create_thumbnail
 from glidergun.types import BBox, CellSize, Chart, Extent, GridCore, PointValue, Scaler
-from glidergun.utils import (
-    add_to_map,
-    format_type,
-    get_crs,
-    get_crs_name,
-    get_nodata_value,
-    is_image_format,
-    is_tile_url,
-)
+from glidergun.utils import format_type, get_crs, get_crs_name, get_nodata_value, is_image_format, is_tile_url
 from glidergun.zonal import Zonal
 
 if TYPE_CHECKING:
@@ -1353,7 +1346,7 @@ def from_dataset(
             transform = t * t.scale(dataset.width / new_width, dataset.height / new_height)  # type: ignore
         g = from_ndarray(data, transform, crs=dataset_crs)
 
-    if dataset.nodata is not None and g.dtype != "uint8":
+    if dataset.nodata is not None:
         g = g.set_nan(dataset.nodata)
 
     return g

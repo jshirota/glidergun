@@ -2,11 +2,13 @@
 
 Inspired by the ARC/INFO GRID implementation of [Map Algebra](https://en.m.wikipedia.org/wiki/Map_algebra).
 
-### Basic Usage
+## Basic Usage
 
 ```bash
 pip install glidergun
 ```
+
+### Example:
 
 ```python
 from glidergun import grid
@@ -18,26 +20,29 @@ dem.save("dem.tif")
 hillshade.save("hillshade.tif", "uint8")
 ```
 
-### With Segment Anything Model (larger dependency download)
+## With Segment Anything Model (larger dependency download)
 
-**CPU-only:**
+### CPU-only:
+
 ```bash
 pip install glidergun[torch]
 ```
 
-**GPU (NVIDIA CUDA 12.1):**
+### GPU (NVIDIA CUDA):
 
-With pip:
+Python 3.14:
 ```bash
-pip install --index-url https://download.pytorch.org/whl/cu121 glidergun[torch]
+pip install --index-url https://download.pytorch.org/whl/cu126 torch torchvision
+pip install glidergun[torch]
 ```
 
-With uv:
+Python 3.10 ~ 3.13:
 ```bash
-uv pip install glidergun[torch]
+pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision
+pip install glidergun[torch]
 ```
 
-Note: GPU acceleration requires Python 3.12 or 3.13. For other Python versions or different CUDA versions, see [PyTorch install guide](https://pytorch.org/get-started/locally/).
+### Example:
 
 ```python
 from glidergun import stack
@@ -49,6 +54,19 @@ sam = bing.sam("tree", "house", "car")
 sam.to_geojson().save("vancouver.json")
 ```
 
-### License
+## ArcGIS
 
-This project is licensed under the MIT License.  See `LICENSE` for details.
+```
+"%LOCALAPPDATA%\ESRI\conda\envs\arcgispro-py3-clone\python.exe" -m pip uninstall -y glidergun torch torchvision
+"%LOCALAPPDATA%\ESRI\conda\envs\arcgispro-py3-clone\python.exe" -m pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision
+"%LOCALAPPDATA%\ESRI\conda\envs\arcgispro-py3-clone\python.exe" -m pip install glidergun[torch]
+
+```
+
+## QGIS
+
+```
+"C:\Program Files\QGIS 3.44.10\apps\Python312\python.exe" -m pip uninstall -y glidergun torch torchvision
+"C:\Program Files\QGIS 3.44.10\apps\Python312\python.exe" -m pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision
+"C:\Program Files\QGIS 3.44.10\apps\Python312\python.exe" -m pip install glidergun[torch]
+```
