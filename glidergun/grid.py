@@ -37,7 +37,9 @@ from glidergun.utils import format_type, get_crs, get_crs_name, get_nodata_value
 from glidergun.zonal import Zonal
 
 if TYPE_CHECKING:
-    from glidergun.stac import Stack
+    from glidergun.loftr import Homography
+    from glidergun.sam import SamResult
+    from glidergun.stack import Stack
 
 logger = logging.getLogger(__name__)
 
@@ -268,22 +270,22 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
     def __invert__(self):
         return con(self, False, True)
 
-    def is_greater_than(self, n: Operand):
+    def is_greater_than(self, n: Operand) -> "Grid":
         return self > n
 
-    def is_less_than(self, n: Operand):
+    def is_less_than(self, n: Operand) -> "Grid":
         return self < n
 
-    def is_greater_than_or_equal(self, n: Operand):
+    def is_greater_than_or_equal(self, n: Operand) -> "Grid":
         return self >= n
 
-    def is_less_than_or_equal(self, n: Operand):
+    def is_less_than_or_equal(self, n: Operand) -> "Grid":
         return self <= n
 
-    def is_equal(self, n: Operand):
+    def is_equal(self, n: Operand) -> "Grid":
         return self == n
 
-    def is_not_equal(self, n: Operand):
+    def is_not_equal(self, n: Operand) -> "Grid":
         return self != n
 
     def _data(self, n: Operand, convert_to_float: bool):
@@ -303,13 +305,13 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 
         return self.local(op(self._data(left, convert_to_float), self._data(right, convert_to_float)))
 
-    def local(self, func: Callable[[ndarray], ndarray] | ndarray):
-        """Apply a numpy function to the data and return a new Grid."""
+    def local(self, func: Callable[[ndarray], ndarray] | ndarray) -> "Grid":
+        """Applies a numpy function to the data and returns a new Grid."""
         data = func if isinstance(func, ndarray) else func(self.data)
         return from_ndarray(data, self.transform, crs=self.crs)
 
-    def mosaic(self, *grids: "Grid", blend: bool = False):
-        """Create a mosaic of multiple grids blending overlaps."""
+    def mosaic(self, *grids: "Grid", blend: bool = False) -> "Grid":
+        """Creates a mosaic of multiple grids blending overlaps."""
         grids_adjusted = standardize(self, *grids, extent="union")
         result = grids_adjusted[0]
         for g in grids_adjusted[1:]:
@@ -326,69 +328,106 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
             result = con(i, result * (dy / d) + g * (dx / d), result.coalesce(g))
         return result
 
-    def calibrate(self, other: "Grid"):
-        """Calibrate another grid to this grid's mean and standard deviation."""
+    def calibrate(self, other: "Grid") -> "Grid":
+        """Calibrates another grid to this grid's mean and standard deviation."""
         g1, g2 = standardize(self, other)
         xor = g1.is_nan() | g2.is_nan()
         g1, g2 = g1.set_nan(xor), g2.set_nan(xor)
         return other * (g1.std / g2.std) + g1.mean - g2.mean * (g1.std / g2.std)
 
-    def is_nan(self):
-        """Return a boolean grid where True indicates NaN cells."""
+    def is_nan(self) -> "Grid":
+        """Returns a boolean grid where True indicates NaN cells."""
         return self.local(np.isnan)
 
-    def abs(self):
-        """Absolute value per cell."""
+    def abs(self) -> "Grid":
+        """Returns a grid with the absolute value."""
         return self.local(np.abs)
 
-    def sin(self):
-        """Sine per cell (radians)."""
+    def sin(self) -> "Grid":
+        """Returns a grid with the sine (radians)."""
         return self.local(np.sin)
 
-    def cos(self):
-        """Cosine per cell (radians)."""
+    def cos(self) -> "Grid":
+        """Returns a grid with the cosine (radians)."""
         return self.local(np.cos)
 
-    def tan(self):
-        """Tangent per cell (radians)."""
+    def tan(self) -> "Grid":
+        """Returns a grid with the tangent (radians)."""
         return self.local(np.tan)
 
-    def arcsin(self):
-        """Arcsine per cell (returns radians)."""
+    def arcsin(self) -> "Grid":
+        """Returns a grid with the arcsine (radians)."""
         return self.local(np.arcsin)
 
-    def arccos(self):
-        """Arccos per cell (returns radians)."""
+    def arccos(self) -> "Grid":
+        """Returns a grid with the arccosine (radians)."""
         return self.local(np.arccos)
 
-    def arctan(self):
-        """Arctangent per cell (returns radians)."""
+    def arctan(self) -> "Grid":
+        """Returns a grid with the arctangent (radians)."""
         return self.local(np.arctan)
 
-    def log(self, base: float | None = None):
-        """Natural log per cell, or change-of-base if `base` provided."""
+    def log(self, base: float | None = None) -> "Grid":
+        """Returns a grid with the natural log or log with specified base."""
         if base is None:
             return self.local(np.log)
         return self.local(lambda a: np.log(a) / np.log(base))
 
-    def round(self, decimals: int = 0):
-        """Round per cell to `decimals`."""
+    def round(self, decimals: int = 0) -> "Grid":
+        """Returns a grid with values rounded to `decimals`."""
         return self.local(lambda a: np.round(a, decimals))
 
-    def georeference(self, extent: BBox, crs: int | str | CRS | None = None):
-        """Assign extent and CRS to the current data without resampling."""
+    def georeference(self, extent: BBox, crs: int | str | CRS | None = None) -> "Grid":
+        """Returns a grid with the given extent and CRS without resampling."""
         return from_ndarray(self.data, extent, crs=get_crs(crs) if crs else self.crs)
 
-    def georeference_to(self, reference: "Grid | Stack"):
-        """Automatically georeference to a reference grid or stack using scan + LoFTR."""
+    @overload
+    def georeference_to(
+        self,
+        reference: "Grid | Stack",
+        *,
+        max_loftr_side: int = 640,
+        confidence_threshold: float = 0.75,
+        tile_size: int | None = None,
+        tile_overlap: float = 0.2,
+        top_k: int = 2,
+        max_long_side: int | None = None,
+        resampling: Resampling | ResamplingMethod = "nearest",
+        homography_only: Literal[False] = False,
+    ) -> "Grid": ...
+
+    @overload
+    def georeference_to(
+        self,
+        reference: "Grid | Stack",
+        *,
+        max_loftr_side: int = 640,
+        confidence_threshold: float = 0.75,
+        tile_size: int | None = None,
+        tile_overlap: float = 0.2,
+        top_k: int = 2,
+        max_long_side: int | None = None,
+        resampling: Resampling | ResamplingMethod = "nearest",
+        homography_only: Literal[True],
+    ) -> "Homography": ...
+
+    @overload
+    def georeference_to(self, reference: "Homography") -> "Grid": ...
+
+    def georeference_to(
+        self, reference: "Grid | Stack | Homography", *, homography_only: bool = False, **kwargs
+    ) -> "Grid | Homography":
+        """Georeferences the grid to a reference grid or stack using scan + LoFTR."""
         try:
-            from glidergun.loftr import georeference_to_reference
+            from glidergun.loftr import Homography, georeference_to_reference
+
+            if isinstance(reference, Homography):
+                return georeference_to_reference(self, reference)
+            return georeference_to_reference(self, reference, homography_only=homography_only, **kwargs)
         except ImportError as ex:
             raise ImportError(
                 "This method requires the torch option.  Please install it with `pip install glidergun[torch]`."
             ) from ex
-
-        return georeference_to_reference(self, reference)
 
     def _reproject(self, transform, crs, width, height, resampling: Resampling | ResamplingMethod) -> "Grid":
         is_bool = self.dtype == "bool"
@@ -413,7 +452,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         return result
 
     def project(self, crs: int | str | CRS, resampling: Resampling | ResamplingMethod = "nearest") -> "Grid":
-        """Reproject to a new CRS using the specified resampling method."""
+        """Returns a grid reprojected to a new CRS using the specified resampling method."""
         crs = get_crs(crs)
         if crs == self.crs:
             return self.type("float32")
@@ -439,14 +478,14 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         height = (ymax - ymin) / abs(self.transform.e) / scaling_y
         return self._reproject(transform, self.crs, width, height, resampling)
 
-    def clip(self, extent: BBox, preserve: bool = True):
-        """Clip to the given extent (same CRS), preserving cell size."""
+    def clip(self, extent: BBox, preserve: bool = True) -> "Grid":
+        """Returns a grid clipped to the given extent (same CRS)."""
         if preserve:
             extent = _adjust_extent(extent, self.transform)
         return self._resample(extent, self.cell_size, Resampling.nearest)
 
-    def clip_at(self, x: float, y: float, width: int = 8, height: int = 8):
-        """Clip a window centered at `(x,y)` with given pixel width/height."""
+    def clip_at(self, x: float, y: float, width: int = 8, height: int = 8) -> "Grid":
+        """Returns a grid clipped to a window centered at `(x,y)` with given pixel width/height."""
         x_offset = self.cell_size.x * width / 2
         y_offset = self.cell_size.y * height / 2
         xmin = x - x_offset
@@ -459,16 +498,16 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         self,
         cell_size: tuple[float, float] | float,
         resampling: Resampling | ResamplingMethod = "nearest",
-    ):
-        """Resample to a new cell size (tuple or scalar), same extent/CRS."""
+    ) -> "Grid":
+        """Returns a grid resampled to a new cell size (tuple or scalar), same extent/CRS."""
         if isinstance(cell_size, (int | float)):
             cell_size = (cell_size, cell_size)
         if self.cell_size == cell_size:
             return self.type("float32")
         return self._resample(self.extent, cell_size, resampling)
 
-    def resample_by(self, factor: float, resampling: Resampling | ResamplingMethod = "nearest"):
-        """Resample by a scaling factor, adjusting cell size accordingly."""
+    def resample_by(self, factor: float, resampling: Resampling | ResamplingMethod = "nearest") -> "Grid":
+        """Returns a grid resampled by a scaling factor, adjusting cell size accordingly."""
         return self.resample(self.cell_size * factor, resampling)
 
     def resize(
@@ -476,14 +515,14 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         width: int,
         height: int,
         resampling: Resampling | ResamplingMethod = "nearest",
-    ):
-        """Resize to an exact cell count, adjusting cell size accordingly."""
+    ) -> "Grid":
+        """Returns a grid resized to an exact cell count, adjusting cell size accordingly."""
         cell_size_x = self.cell_size.x * self.width / width
         cell_size_y = self.cell_size.y * self.height / height
         return self.resample((cell_size_x, cell_size_y), resampling)
 
-    def buffer(self, value: float | int, count: int):
-        """Grow/shrink regions of `value` by `count` cells using focal logic."""
+    def buffer(self, value: float | int, count: int) -> "Grid":
+        """Returns a grid with regions of `value` grown/shrunk by `count` cells using focal logic."""
         if count < 0:
             g = (self != value).buffer(1, -count)
             return con(g == 0, value, self.set_nan(self == value))
@@ -492,24 +531,25 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
             g = con(g.focal_count(value, 1, True) > 0, value, g)
         return g
 
-    def heat_map(self, sigma: float = 5.0):
+    def heat_map(self, sigma: float = 5.0) -> "Grid":
+        """Returns a heat map of the grid using Gaussian filtering."""
         density = self.con(self.is_nan(), 0.0).gaussian_filter(sigma).stretch(0.0, 1.0)
         return density.cap_min(0.1, True).color("turbo")
 
-    def canny(self, threshold1: float = 100.0, threshold2: float = 200.0, **kwargs):
-        """Detect edges using the Canny algorithm with given thresholds."""
+    def canny(self, threshold1: float = 100.0, threshold2: float = 200.0, **kwargs) -> "Grid":
+        """Returns a grid with edges detected using the Canny algorithm with given thresholds."""
         return self.local(lambda a: Canny(a, threshold1, threshold2, **kwargs))
 
-    def gaussian_filter(self, sigma: float = 1.0, **kwargs):
-        """Apply Gaussian filter to the grid."""
+    def gaussian_filter(self, sigma: float = 1.0, **kwargs) -> "Grid":
+        """Returns a grid with a Gaussian filter applied."""
         return self.local(lambda a: gaussian_filter(a, sigma=sigma, **kwargs))
 
-    def sobel(self, axis: int = -1, **kwargs):
-        """Apply Sobel filter to the grid."""
+    def sobel(self, axis: int = -1, **kwargs) -> "Grid":
+        """Returns a grid with a Sobel filter applied."""
         return self.local(lambda a: sobel(a, axis=axis, **kwargs))
 
-    def distance(self):
-        """Euclidean distance from cells with positive values."""
+    def distance(self) -> "Grid":
+        """Returns a grid with Euclidean distance from cells with positive values."""
         from scipy.ndimage import distance_transform_edt
 
         g = self.coalesce(0.0)
@@ -528,8 +568,8 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         cell_size: tuple[float, float] | float | None = None,
         radius: float | None = None,
         max_workers: int = 1,
-    ):
-        """Inverse-distance weighting interpolation to a grid."""
+    ) -> "Grid":
+        """Returns a grid with inverse-distance weighting interpolation."""
         if points is None:
             points = self.to_points()
         return idw(
@@ -541,29 +581,29 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
             max_workers,
         )
 
-    def randomize(self, normal_distribution: bool = False):
-        """Fill with random values (uniform or normal) matching shape."""
+    def randomize(self, normal_distribution: bool = False) -> "Grid":
+        """Returns a grid filled with random values (uniform or normal) matching shape."""
         f = np.random.randn if normal_distribution else np.random.rand
         return self.local(f(self.height, self.width))
 
-    def aspect(self, radians: bool = False):
-        """Compute aspect (downslope direction) in degrees by default."""
+    def aspect(self, radians: bool = False) -> "Grid":
+        """Returns a grid with aspect (downslope direction) in degrees by default."""
         y, x = gradient(self.data)
         g = self.local(arctan2(-y, x))
         if radians:
             return g
         return (g.local(np.degrees) + 360) % 360
 
-    def slope(self, radians: bool = False):
-        """Compute slope from gradients; degrees by default."""
+    def slope(self, radians: bool = False) -> "Grid":
+        """Returns a grid with slope from gradients; degrees by default."""
         y, x = gradient(self.data)
         g = self.local(arctan(sqrt(x * x + y * y)))
         if radians:
             return g
         return g.local(np.degrees)
 
-    def hillshade(self, azimuth: float = 315, altitude: float = 45):
-        """Simulate illumination given sun azimuth/altitude (degrees)."""
+    def hillshade(self, azimuth: float = 315, altitude: float = 45) -> "Grid":
+        """Returns a grid simulating illumination given sun azimuth/altitude (degrees)."""
         azimuth = np.deg2rad(azimuth)
         altitude = np.deg2rad(altitude)
         aspect = self.aspect(True).data
@@ -576,8 +616,8 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         predicate: Operand | Callable[["Grid"], "Grid"],
         replacement: Operand,
         fallback: Operand | None = None,
-    ):
-        """Conditional evaluation: if predicate then replacement else fallback."""
+    ) -> "Grid":
+        """Returns a grid with conditional evaluation: if predicate then replacement else fallback."""
         if isinstance(predicate, FunctionType):
             g = predicate(self)
         elif isinstance(predicate, Grid):
@@ -590,16 +630,16 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         self,
         predicate: Operand | Callable[["Grid"], "Grid"],
         fallback: Operand | None = None,
-    ):
-        """Set cells matching predicate to NaN, optionally using fallback."""
+    ) -> "Grid":
+        """Returns a grid with cells matching predicate set to NaN, optionally using fallback."""
         return self.con(predicate, np.nan, fallback)
 
-    def coalesce(self, value: Operand):
-        """Replace NaN cells with the given value."""
+    def coalesce(self, value: Operand) -> "Grid":
+        """Returns a grid with NaN cells replaced with the given value."""
         return self.con(self.is_nan(), value, self)
 
-    def then(self, true_value: Operand, false_value: Operand):
-        """Alias for conditional: replace True/False cells with given values."""
+    def then(self, true_value: Operand, false_value: Operand) -> "Grid":
+        """Returns a grid with True/False cells replaced with given values."""
         return con(self, true_value, false_value)
 
     def process_tiles(
@@ -609,14 +649,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         buffer: int = 0,
         max_workers: int = 1,
     ) -> "Grid":
-        """Apply a function to tiles and mosaic results.
-
-        Splits the grid into tiles of approximately `tile_size` cells per
-        side (scaled by cell size), optionally expands each tile by `buffer`
-        cells to reduce edge effects, applies `func` to each tile, and
-        mosaics the results back into a single grid. Uses threads when
-        `max_workers > 1`.
-        """
+        """Returns a grid by applying a function to tiles and mosaicking results."""
         cell_x, cell_y = self.cell_size
         tiles = list(self.extent.tiles(cell_x * tile_size, cell_y * tile_size))
 
@@ -654,23 +687,23 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
     @overload
     def overlay(self, other: "Stack", alpha: float = 1.0) -> "Stack": ...
 
-    def overlay(self, other: "Grid | Stack", alpha: float = 1.0):
-        """Overlays another grid or stack on top of the current grid with alpha blending."""
+    def overlay(self, other: "Grid | Stack", alpha: float = 1.0) -> "Grid | Stack":
+        """Returns a grid or stack with another grid or stack overlaid on top with alpha blending."""
         if isinstance(other, Grid):
             g1, g2 = standardize(self, other, extent="first")
             return con(g2.is_nan(), g1, g1 * (1 - alpha) + g2 * alpha)
 
         return self.to_stack().overlay(other, alpha)
 
-    def draw(self, shape: BaseGeometry, value: float | None):
-        """Draws a shape on the grid with the given value."""
+    def draw(self, shape: BaseGeometry, value: float | None) -> "Grid":
+        """Returns a grid with a shape drawn on it with the given value."""
         if value is None or value is np.nan:
             nodata_value: float = get_nodata_value("float32")  # type: ignore
             return self.draw(shape, nodata_value).set_nan(nodata_value)
         return self.overlay(grid([(shape, value)], self.extent, cell_size=self.cell_size))
 
     def value_at(self, x: float, y: float) -> float:
-        """Return the cell value at map coordinate `(x,y)` or NaN if out-of-bounds."""
+        """Returns the cell value at map coordinate `(x,y)` or NaN if out-of-bounds."""
         c = int((x - self.xmin) / self.cell_size.x)
         r = int((self.ymax - y) / self.cell_size.y)
         if c < 0 or c >= self.width or r < 0 or r >= self.height:
@@ -679,6 +712,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 
     @cached_property
     def data_extent(self) -> Extent:
+        """Returns the extent of the grid data, excluding NaN cells."""
         if not self.has_nan:
             return self.extent
         rows = np.any(~np.isnan(self.data), axis=1)
@@ -709,11 +743,11 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         return array[~np.isnan(array[:, 2])]
 
     def to_points(self, include_nan: bool = False) -> list[PointValue]:
-        """Convert cells to `(x,y,value)` points; optionally include NaNs."""
+        """Returns cells as `(x,y,value)` points; optionally include NaNs."""
         return [PointValue(float(x), float(y), float(v)) for x, y, v in self._coords_with_values(include_nan)]
 
     def to_polygons(self, include_nan: bool = False) -> list[tuple[Polygon, float]]:
-        """Polygonize regions of constant values; optionally include NaNs and smooth."""
+        """Returns polygons for regions of constant values; optionally include NaNs and smooth."""
         g = self * 1
         mask = None if include_nan else np.isfinite(g.data)
         results = []
@@ -728,8 +762,8 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
     @overload
     def to_geojson(self, polygonize: Literal[False], include_nan: bool = False) -> FeatureCollection[Point]: ...
 
-    def to_geojson(self, polygonize: bool, include_nan: bool = False):  # type: ignore
-        """Export points or polygons as a GeoJSON FeatureCollection."""
+    def to_geojson(self, polygonize: bool, include_nan: bool = False) -> FeatureCollection:
+        """Returns points or polygons as a GeoJSON FeatureCollection."""
         if polygonize:
             features = self.to_polygons(include_nan=include_nan)
         else:
@@ -740,8 +774,8 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         self,
         items: Iterable[tuple[BaseGeometry, float] | tuple[float, float, float]],
         all_touched: bool = False,
-    ):
-        """Rasterize geometries or (x,y,value) tuples onto this grid's canvas."""
+    ) -> "Grid":
+        """Returns a grid with geometries or (x,y,value) tuples rasterized onto this grid's canvas."""
 
         def get_geometries():
             for item in items:
@@ -760,8 +794,8 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         )
         return self.local(array)
 
-    def to_stack(self):
-        """Convert single-band grid to RGB stack using current colormap."""
+    def to_stack(self) -> "Stack":
+        """Returns an RGB stack from a single-band grid using the current colormap."""
         import matplotlib.pyplot as plt
 
         from glidergun.stack import stack
@@ -775,11 +809,11 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         return stack([r, g, b])
 
     def percentile(self, percent: float) -> float:
-        """Return the `percent` percentile (NaN-aware)."""
+        """Returns the `percent` percentile (NaN-aware)."""
         return np.nanpercentile(self.data, percent)
 
-    def percent_clip(self, min_percent: float, max_percent: float):
-        """Clip values to a percentile range, returning a new grid."""
+    def percent_clip(self, min_percent: float, max_percent: float) -> "Grid":
+        """Returns a grid with values clipped to a percentile range."""
         min_value = self.percentile(min_percent)
         max_value = self.percentile(max_percent)
 
@@ -788,14 +822,14 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 
         return self.cap_range(min_value, max_value)
 
-    def reclass(self, *mapping: tuple[float, float, float]):
-        """Reclassify ranges to specific values based on `(min,max,value)` tuples."""
+    def reclass(self, *mapping: tuple[float, float, float]) -> "Grid":
+        """Returns a grid with ranges reclassified to specific values based on `(min,max,value)` tuples."""
         conditions = [(self.data >= min) & (self.data < max) for min, max, _ in mapping]
         values = [value for _, _, value in mapping]
         return self.local(np.select(conditions, values, np.nan))
 
-    def slice(self, count: int, percent_clip: float = 0.1):
-        """Divide range into `count` equal slices and assign slice indices."""
+    def slice(self, count: int, percent_clip: float = 0.1) -> "Grid":
+        """Returns a grid with range divided into `count` equal slices and assigns slice indices."""
         min = self.percentile(percent_clip)
         max = self.percentile(100 - percent_clip)
         interval = (max - min) / count
@@ -809,8 +843,8 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         ]
         return self.reclass(*mapping)
 
-    def stretch(self, min_value: float, max_value: float):
-        """Linearly stretch values to `[min_value, max_value]`."""
+    def stretch(self, min_value: float, max_value: float) -> "Grid":
+        """Returns a grid with values linearly stretched to `[min_value, max_value]`."""
         expected_range = max_value - min_value
         actual_range = self.max - self.min
 
@@ -820,20 +854,20 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
 
         return (self - self.min) * expected_range / actual_range + min_value
 
-    def cap_range(self, min: Operand, max: Operand, set_nan: bool = False):
-        """Cap values to `[min,max]`; optionally set outside to NaN."""
+    def cap_range(self, min: Operand, max: Operand, set_nan: bool = False) -> "Grid":
+        """Returns a grid with values capped to `[min,max]`; optionally set outside to NaN."""
         return self.cap_min(min, set_nan).cap_max(max, set_nan)
 
-    def cap_min(self, value: Operand, set_nan: bool = False):
-        """Cap values below `value`; optionally set capped cells to NaN."""
+    def cap_min(self, value: Operand, set_nan: bool = False) -> "Grid":
+        """Returns a grid with values capped below `value`; optionally set capped cells to NaN."""
         return con(self < value, np.nan if set_nan else value, self)
 
-    def cap_max(self, value: Operand, set_nan: bool = False):
-        """Cap values above `value`; optionally set capped cells to NaN."""
+    def cap_max(self, value: Operand, set_nan: bool = False) -> "Grid":
+        """Returns a grid with values capped above `value`; optionally set capped cells to NaN."""
         return con(self > value, np.nan if set_nan else value, self)
 
-    def kmeans_cluster(self, n_clusters: int, nodata: float = 0.0, **kwargs):
-        """Cluster cell values via KMeans and return cluster-center grid."""
+    def kmeans_cluster(self, n_clusters: int, nodata: float = 0.0, **kwargs) -> "Grid":
+        """Returns a grid with cell values clustered via KMeans and cluster centers assigned."""
         from sklearn.cluster import KMeans
 
         g = self.coalesce(nodata)
@@ -842,23 +876,23 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         result = self.local(data)
         return result.set_nan(self.is_nan())
 
-    def scale(self, scaler: Scaler | None = None, **fit_params):
-        """Apply a scaler's `fit_transform` across the grid."""
+    def scale(self, scaler: Scaler | None = None, **fit_params) -> "Grid":
+        """Returns a grid with values scaled using a scaler's `fit_transform`."""
         from sklearn.preprocessing import StandardScaler
 
         if scaler is None:
             scaler = StandardScaler()
         return self.local(lambda a: scaler.fit_transform(a, **fit_params))
 
-    def hist(self, **kwargs) -> Chart:
-        """Build a histogram chart of value counts (NaN-aware)."""
+    def hist(self) -> Chart:
+        """Returns a histogram chart of value counts (NaN-aware)."""
         return create_histogram((self.bins, "gray"))
 
-    def color(self, cmap: ColorMap | Any):
-        """Return a Grid with a different display colormap (for previews/maps)."""
+    def color(self, cmap: ColorMap | Any) -> "Grid":
+        """Return a grid with a different display colormap (for previews/maps)."""
         return dataclasses.replace(self, display=cmap)
 
-    def type(self, dtype: DataType, nan_to_num: float | None = None):
+    def type(self, dtype: DataType, nan_to_num: float | None = None) -> "Grid":
         """Convert dtype; optionally replace NaNs before casting."""
         if self.dtype == dtype:
             return self
@@ -866,10 +900,14 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
             return self.local(lambda a: np.asanyarray(a, dtype=dtype))
         return self.local(lambda a: np.nan_to_num(a, nan=nan_to_num).astype(dtype))
 
-    def to_bytes(self, dtype: DataType | None = None, driver: str = "") -> bytes:
+    def to_array(self) -> np.ndarray:
+        """Return the grid as a 2D numpy array with shape (height, width)."""
+        return np.stack([self.data], axis=0)
+
+    def to_bytes(self, dtype: DataType | None = None, nodata: int | float | None = None, driver: str = "") -> bytes:
         """Serialize grid to bytes (COG by default)."""
         with MemoryFile() as memory_file:
-            self.save(memory_file, dtype, driver)
+            self.save(memory_file, dtype, nodata, driver)
             return memory_file.read()
 
     def sam(
@@ -879,7 +917,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         hf_token: str | None = None,
         confidence_threshold: float = 0.5,
         tile_size: int = 1024,
-    ):
+    ) -> "SamResult":
         """Run Segment Anything Model 3 (SAM 3) over the stack with text prompts.
 
         Args:
@@ -908,7 +946,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         )
 
     @overload
-    def save(self, file: str, dtype: DataType | None = None) -> None:
+    def save(self, file: str, dtype: DataType | None = None, nodata: int | float | None = None) -> None:
         """Saves the grid to a file.
 
         Most commonly, `.tif` extension is used to save as a GeoTIFF (COG).
@@ -920,21 +958,25 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         Args:
             file (str): File path (e.g. "output.tif").
             dtype (DataType | None): Data type for saving (optional).
+            nodata (int | float | None): NoData value for saving (optional).
         """
         ...
 
     @overload
-    def save(self, file: MemoryFile, dtype: DataType | None, driver: str) -> None:
+    def save(self, file: MemoryFile, dtype: DataType | None, nodata: int | float | None, driver: str) -> None:
         """Saves the grid to a memory file.
 
         Args:
             file (MemoryFile): Memory file to save the grid to.
             dtype (DataType | None): Data type for saving (optional).
+            nodata (int | float | None): NoData value for saving (optional).
             driver (str): Rasterio driver name (optional).
         """
         ...
 
-    def save(self, file: str | MemoryFile, dtype: DataType | None = None, driver: str = ""):
+    def save(
+        self, file: str | MemoryFile, dtype: DataType | None = None, nodata: int | float | None = None, driver: str = ""
+    ) -> None:
         g = self * 1 if self.dtype == "bool" else self
 
         if is_image_format(driver, file):
@@ -944,14 +986,14 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         if dtype is None:
             dtype = g.dtype
 
-        nodata = get_nodata_value(dtype)
+        nodata = get_nodata_value(dtype) if nodata is None else nodata
 
         if nodata is not None:
             g = g.coalesce(nodata)
 
         write_to_file(file, driver, dtype, nodata, g)
 
-    def add_to_map(self, name: str | None = None):
+    def add_to_map(self, name: str | None = None) -> None:
         """Add as a layer to the active map in ArcGIS or QGIS."""
         add_to_map(self, name)
 
@@ -1081,7 +1123,30 @@ def grid(  # type: ignore
 @overload
 def grid(
     data: ndarray,
-    extent: BBox | Affine | None = None,
+    extent: BBox | None = None,
+) -> Grid:
+    """Creates a new grid from an array.
+
+    Args:
+        data: Array.
+        extent: Map extent.
+
+    Example:
+        >>> grid(np.arange(12).reshape(3, 4))
+        image: 4x3 int32 | range: 0~11 | mean: 6 | std: 3 | crs: EPSG:4326 | cell: 0.25, 0.3333333333333333
+
+    Returns:
+        Grid: A new grid.
+    """
+    ...
+
+
+@overload
+def grid(
+    data: ndarray,
+    extent: Affine,
+    *,
+    crs: CRS | int | str = 4326,
 ) -> Grid:
     """Creates a new grid from an array.
 
@@ -1208,6 +1273,7 @@ def grid(  # type: ignore
     | Iterable[tuple[BaseGeometry, float] | tuple[float, float, float]],
     extent: BBox | Literal["#"] | Affine | None = None,
     *,
+    crs: CRS | int | str | None = None,
     cell_size: tuple[float, float] | float | None = None,
     resample_by: float | None = None,
     resampling: Resampling | ResamplingMethod | None = None,
@@ -1229,7 +1295,7 @@ def grid(  # type: ignore
 
         if isinstance(data, ndarray):
             w, h = data.shape[1], data.shape[0]
-            crs = extent.crs if isinstance(extent, Extent) else 4326
+            crs = extent.crs if isinstance(extent, Extent) else crs or 4326
             return from_ndarray(data, extent or (0, 0, w / 1000, h / 1000), crs)
         if isinstance(extent, Affine):
             raise ValueError("When extent is an Affine transform, data must be an ndarray.")
@@ -1284,7 +1350,7 @@ def from_path(
     resample_by: float | None = None,
     resampling: Resampling | ResamplingMethod | None = None,
     index: int = 1,
-):
+) -> Grid:
     with rasterio.open(path) as dataset:
         return from_dataset(dataset, extent, resample_by=resample_by, resampling=resampling, index=index)
 
@@ -1358,7 +1424,7 @@ def from_dem(
     limit: int,
     resample_by: float | None = None,
     resampling: Resampling | ResamplingMethod = "average",
-):
+) -> Grid:
     from glidergun.stac import planetary_computer_url, search_mosaic
 
     collections = {
@@ -1379,7 +1445,7 @@ def from_dem(
     )
 
 
-def from_ndarray(data: ndarray, extent: BBox | Affine, crs: int | str | CRS):
+def from_ndarray(data: ndarray, extent: BBox | Affine, crs: int | str | CRS) -> Grid:
     if isinstance(extent, Affine):
         transform = extent
     else:
@@ -1387,7 +1453,7 @@ def from_ndarray(data: ndarray, extent: BBox | Affine, crs: int | str | CRS):
     return Grid(format_type(data), transform, get_crs(crs))
 
 
-def from_constant(data: int | float, extent: Extent, cell_size: tuple[float, float] | float):
+def from_constant(data: int | float, extent: Extent, cell_size: tuple[float, float] | float) -> Grid:
     cell_size = CellSize(cell_size, cell_size) if isinstance(cell_size, (int | float)) else CellSize(*cell_size)
     xmin, ymin, xmax, ymax = extent
     width = int((xmax - xmin) / cell_size.x + 0.5)
@@ -1402,12 +1468,12 @@ def from_shapes(
     shapes: Iterable[tuple[float, float, float] | tuple[BaseGeometry, float]],
     extent: Extent,
     cell_size: tuple[float, float] | float,
-):
+) -> Grid:
     g = grid(np.nan, extent, cell_size=cell_size)
     return g.rasterize(shapes)
 
 
-def _adjust_extent(extent: BBox, transform: Affine):
+def _adjust_extent(extent: BBox, transform: Affine) -> tuple[float, float, float, float]:
     xmin, ymin, xmax, ymax = extent
     window = from_bounds(xmin, ymin, xmax, ymax, transform)
     window = window.round_offsets().round_lengths()
@@ -1425,13 +1491,13 @@ def _extent(width, height, transform, crs) -> Extent:
     return Extent(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1), crs)
 
 
-def _to_uint8_range(grid: Grid):
+def _to_uint8_range(grid: Grid) -> Grid:
     if grid.dtype == "bool" or grid.min >= 0 and grid.max <= 255:
         return grid.type("float32")
     return grid.percent_clip(0.1, 99.9).stretch(0, 255)
 
 
-def con(grid: Grid, true_value: Operand, false_value: Operand):
+def con(grid: Grid, true_value: Operand, false_value: Operand) -> Grid:
     """Evaluates a boolean grid .
 
     Args:
@@ -1543,7 +1609,7 @@ def idw(
     cell_size: tuple[float, float] | float,
     radius: float | None = None,
     max_workers: int = 1,
-):
+) -> Grid:
     """Calculates the inverse distance weighting (IDW) interpolation for a set of points."""
     g = grid(np.nan, extent, cell_size=cell_size)
 

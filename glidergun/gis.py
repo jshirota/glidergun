@@ -3,12 +3,12 @@ import sys
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from glidergun.literals import Basemap
 from glidergun.utils import safe_filename
 
 if TYPE_CHECKING:
     from glidergun.geojson import FeatureCollection
-    from glidergun.stac import Grid, Stack
+    from glidergun.grid import Grid
+    from glidergun.stack import Stack
 
 
 def add_to_map(data: "Grid | Stack | FeatureCollection", name: str | None):
@@ -59,9 +59,3 @@ def add_to_map(data: "Grid | Stack | FeatureCollection", name: str | None):
         return
 
     raise RuntimeError("This function is only supported within ArcGIS Pro or QGIS.")
-
-
-def sam(prompt: str, basemap: Basemap = "esri", max_tiles: int = 100):
-    from glidergun.stac import stack
-
-    stack(basemap, "#", max_tiles=max_tiles).sam(prompt).add_to_map(prompt)

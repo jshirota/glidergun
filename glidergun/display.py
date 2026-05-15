@@ -24,7 +24,9 @@ def get_html(obj: Union[Grid, Stack, "ArtistAnimation", SamResult]):
 
 
 def animate(grids: Iterable[Grid | Stack], cmap: ColorMap | Any = "gray", interval: int = 200):
-    return create_animation([(o.to_array() if isinstance(o, Stack) else o.data) for o in grids], cmap, interval)
+    return create_animation(
+        [(o.to_array().transpose(1, 2, 0) if isinstance(o, Stack) else o.data) for o in grids], cmap, interval
+    )
 
 
 if ipython := IPython.get_ipython():  # type: ignore
