@@ -8,7 +8,7 @@ from base64 import b64encode
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Literal, Union, overload
+from typing import TYPE_CHECKING, Literal, Union, overload
 
 import numpy as np
 import PIL.Image as Image
@@ -43,6 +43,10 @@ from glidergun.plot import create_histogram, create_thumbnail
 from glidergun.quadkey import get_rows
 from glidergun.types import BBox, CellSize, Chart, Scaler
 from glidergun.utils import get_crs_name, get_driver, get_nodata_value, is_image_format, is_tile_url
+
+if TYPE_CHECKING:
+    from glidergun.loftr import Homography
+    from glidergun.sam import SamResult
 
 logger = logging.getLogger(__name__)
 
@@ -261,25 +265,25 @@ class Stack:
             return self.zip_with(n, lambda g1, g2: op(g1, g2))
         return self.each(lambda g: op(g, n))
 
-    def scale(self, scaler: Scaler | None = None, **fit_params):
-        """Scales the stack using the given scaler."""
+    def scale(self, scaler: Scaler | None = None, **fit_params) -> "Stack":
+        """Returns a stack scaled using the given scaler."""
         return self.each(lambda g: g.scale(scaler, **fit_params))
 
-    def percent_clip(self, min_percent: float, max_percent: float):
-        """Clips the stack values to the given percentile range."""
+    def percent_clip(self, min_percent: float, max_percent: float) -> "Stack":
+        """Returns a stack with values clipped to the given percentile range."""
         return self.each(lambda g: g.percent_clip(min_percent, max_percent))
 
-    def stretch(self, min_value: float, max_value: float):
-        """Linearly stretch values to `[min_value, max_value]`."""
+    def stretch(self, min_value: float, max_value: float) -> "Stack":
+        """Returns a stack with values linearly stretched to `[min_value, max_value]`."""
         return self.each(lambda g: g.stretch(min_value, max_value))
 
-    def hist(self, **kwargs) -> Chart:
+    def hist(self) -> Chart:
         """Build a histogram chart of value counts (NaN-aware)."""
         colors = {0: "red", 1: "green", 2: "blue"}
         return create_histogram(*((g.bins, colors.get(i, "gray")) for i, g in enumerate(self.grids)))
 
-    def color(self, rgb: tuple[int, int, int]):
-        """Sets the RGB display bands."""
+    def color(self, rgb: tuple[int, int, int]) -> "Stack":
+        """Returns a stack with the specified RGB display bands."""
         valid = set(range(1, len(self.grids) + 1))
         if set(rgb) - valid:
             raise ValueError("Invalid bands specified.")
@@ -287,68 +291,106 @@ class Stack:
 
     @overload
     def each(self, func: Callable[[Grid], Grid]) -> "Stack":
-        """Applies a function (of Grid) and returns a new `Stack`."""
+        """Returns a stack with a function (of Grid) applied to each grid."""
         ...
 
     @overload
     def each(self, func: Callable[[int, Grid], Grid]) -> "Stack":
-        """Applies a function (of band number and Grid) and returns a new `Stack`."""
+        """Returns a stack with a function (of band number and Grid) applied to each grid."""
         ...
 
-    def each(self, func: Callable[[Grid], Grid] | Callable[[int, Grid], Grid]):
+    def each(self, func: Callable[[Grid], Grid] | Callable[[int, Grid], Grid]) -> "Stack":
         arg_count = len(inspect.signature(func).parameters)
         if arg_count == 1:
             return stack([func(g) for g in self.grids])  # type: ignore
         return stack([func(i, g) for i, g in enumerate(self.grids, 1)])  # type: ignore
 
-    def local(self, func: Callable[[np.ndarray], np.ndarray] | np.ndarray):
-        """Apply a numpy function to the data for each grid."""
+    def local(self, func: Callable[[np.ndarray], np.ndarray] | np.ndarray) -> "Stack":
+        """Returns a stack with a numpy function applied to the data for each grid."""
         return self.each(lambda g: g.local(func))
 
-    def georeference(self, extent: BBox, crs: int | str | CRS | None = None):
-        """Assign extent and CRS to the current data without resampling."""
+    def georeference(self, extent: BBox, crs: int | str | CRS | None = None) -> "Stack":
+        """Returns a stack with extent and CRS assigned to the current data without resampling."""
         return self.each(lambda g: g.georeference(extent, crs))
 
-    def georeference_to(self, reference: "Grid | Stack"):
-        """Automatically georeference to a reference grid or stack using scan + LoFTR."""
+    @overload
+    def georeference_to(
+        self,
+        reference: "Grid | Stack",
+        *,
+        max_loftr_side: int = 640,
+        confidence_threshold: float = 0.75,
+        tile_size: int | None = None,
+        tile_overlap: float = 0.2,
+        top_k: int = 2,
+        max_long_side: int | None = None,
+        resampling: Resampling | ResamplingMethod = "nearest",
+        homography_only: Literal[False] = False,
+    ) -> "Stack": ...
+
+    @overload
+    def georeference_to(
+        self,
+        reference: "Grid | Stack",
+        *,
+        max_loftr_side: int = 640,
+        confidence_threshold: float = 0.75,
+        tile_size: int | None = None,
+        tile_overlap: float = 0.2,
+        top_k: int = 2,
+        max_long_side: int | None = None,
+        resampling: Resampling | ResamplingMethod = "nearest",
+        homography_only: Literal[True],
+    ) -> "Homography": ...
+
+    @overload
+    def georeference_to(self, reference: "Homography") -> "Stack": ...
+
+    def georeference_to(
+        self, reference: "Grid | Stack | Homography", *, homography_only: bool = False, **kwargs
+    ) -> "Stack | Homography":
+        """Georeferences the stack to a reference grid or stack using scan + LoFTR."""
         try:
-            from glidergun.loftr import georeference_to_reference
+            from glidergun.loftr import Homography, georeference_to_reference
+
+            if isinstance(reference, Homography):
+                return georeference_to_reference(self, reference)
+            return georeference_to_reference(self, reference, homography_only=homography_only, **kwargs)
         except ImportError as ex:
             raise ImportError(
                 "This method requires the torch option.  Please install it with `pip install glidergun[torch]`."
             ) from ex
 
-        return georeference_to_reference(self, reference)
-
-    def mosaic(self, *stacks: "Stack", blend: bool = False):
+    def mosaic(self, *stacks: "Stack", blend: bool = False) -> "Stack":
+        """Returns a stack mosaicked with other stacks, optionally blending overlapping areas."""
         return self.each(lambda i, g: g.mosaic(*(s.grids[i - 1] for s in stacks), blend=blend))
 
-    def clip(self, extent: BBox):
-        """Clips the stack to the given extent."""
+    def clip(self, extent: BBox) -> "Stack":
+        """Returns a stack clipped to the given extent."""
         return self.each(lambda g: g.clip(extent))
 
-    def clip_at(self, x: float, y: float, width: int = 8, height: int = 8):
-        """Clips the stack to a window centered at (x, y) with the given width and height."""
+    def clip_at(self, x: float, y: float, width: int = 8, height: int = 8) -> "Stack":
+        """Returns a stack clipped to a window centered at (x, y) with the given width and height."""
         return self.each(lambda g: g.clip_at(x, y, width, height))
 
-    def extract_bands(self, *bands: int):
-        """Extracts selected 1-based bands into a new `Stack`."""
+    def extract_bands(self, *bands: int) -> "Stack":
+        """Returns a stack with selected bands."""
         return stack([self.grids[i - 1] for i in bands])
 
-    def mean(self):
-        """Calculates the mean across all bands."""
+    def mean(self) -> Grid:
+        """Returns a grid with the mean across all bands."""
         return mean(*self.grids)
 
-    def std(self):
-        """Calculates the standard deviation across all bands."""
+    def std(self) -> Grid:
+        """Returns a grid with the standard deviation across all bands."""
         return std(*self.grids)
 
-    def min(self):
-        """Calculates the minimum value across all bands."""
+    def min(self) -> Grid:
+        """Returns a grid with the minimum value across all bands."""
         return minimum(*self.grids)
 
-    def max(self):
-        """Calculates the maximum value across all bands."""
+    def max(self) -> Grid:
+        """Returns a grid with the maximum value across all bands."""
         return maximum(*self.grids)
 
     @overload
@@ -367,37 +409,39 @@ class Stack:
         """Projects the stack to a new coordinate reference system (CRS)."""
         return self.each(lambda g: g.project(crs, resampling))
 
-    def resample(self, cell_size: tuple[float, float] | float, resampling: Resampling | ResamplingMethod = "nearest"):
-        """Resamples the stack to a new cell size."""
+    def resample(
+        self, cell_size: tuple[float, float] | float, resampling: Resampling | ResamplingMethod = "nearest"
+    ) -> "Stack":
+        """Returns a stack resampled to a new cell size."""
         return self.each(lambda g: g.resample(cell_size, resampling))
 
-    def resample_by(self, factor: float, resampling: Resampling | ResamplingMethod = "nearest"):
-        """Resample by a scaling factor, adjusting cell size accordingly."""
+    def resample_by(self, factor: float, resampling: Resampling | ResamplingMethod = "nearest") -> "Stack":
+        """Returns a stack resampled by a scaling factor, adjusting cell size accordingly."""
         return self.each(lambda g: g.resample_by(factor, resampling))
 
-    def canny(self, threshold1: float = 100.0, threshold2: float = 200.0, **kwargs):
-        """Detect edges using the Canny algorithm with given thresholds."""
+    def canny(self, threshold1: float = 100.0, threshold2: float = 200.0, **kwargs) -> "Stack":
+        """Returns a stack with the Canny edge detection algorithm applied with given thresholds."""
         return self.each(lambda g: g.canny(threshold1, threshold2, **kwargs))
 
-    def gaussian_filter(self, sigma: float = 1.0, **kwargs):
-        """Apply Gaussian filter to the stack."""
+    def gaussian_filter(self, sigma: float = 1.0, **kwargs) -> "Stack":
+        """Returns a stack with a Gaussian filter applied."""
         return self.each(lambda g: g.gaussian_filter(sigma=sigma, **kwargs))
 
-    def sobel(self, axis: int = -1, **kwargs):
-        """Apply Sobel filter to the stack."""
+    def sobel(self, axis: int = -1, **kwargs) -> "Stack":
+        """Returns a stack with a Sobel filter applied."""
         return self.each(lambda g: g.sobel(axis=axis, **kwargs))
 
     def zip_with(
         self, other_stack: "Stack", func: Callable[[Grid, Grid], Grid], extent: ExtentResolution | Extent = "intersect"
-    ):
+    ) -> "Stack":
         """Combines two stacks by applying a function to corresponding bands."""
         grids = []
-        for grid1, grid2 in zip(self.grids, other_stack.grids, strict=True):
+        for grid1, grid2 in zip(self.grids, other_stack.grids, strict=False):
             grid1, grid2 = standardize(grid1, grid2, extent=extent)
             grids.append(func(grid1, grid2))
         return stack(grids)
 
-    def overlay(self, other: "Grid | Stack", alpha: float = 1.0):
+    def overlay(self, other: "Grid | Stack", alpha: float = 1.0) -> "Stack":
         """Overlays another grid or stack on top of the current stack with alpha blending."""
         return self.zip_with(
             other if isinstance(other, Stack) else other.to_stack(),
@@ -405,7 +449,7 @@ class Stack:
             extent="first",
         )
 
-    def draw(self, shape: BaseGeometry, *values: float | None):
+    def draw(self, shape: BaseGeometry, *values: float | None) -> "Stack":
         """Draws a shape on the stack with the given values."""
         if not values:
             values = (None,) * len(self.grids)
@@ -415,21 +459,22 @@ class Stack:
             raise ValueError("Number of values must match number of bands.")
         return self.each(lambda i, g: g.draw(shape, values[i - 1]))
 
-    def value_at(self, x: float, y: float):
+    def value_at(self, x: float, y: float) -> tuple[float, ...]:
         """Returns the values at the given coordinates for all bands."""
         return tuple(g.value_at(x, y) for g in self.grids)
 
-    def type(self, dtype: DataType, nan_to_num: float | None = None):
+    def type(self, dtype: DataType, nan_to_num: float | None = None) -> "Stack":
         """Converts the stack to the given data type, optionally replacing NaNs."""
         return self.each(lambda g: g.type(dtype, nan_to_num))
 
-    def to_array(self):
-        return np.stack([g.data for g in self.grids], axis=-1)
+    def to_array(self) -> np.ndarray:
+        """Converts the stack to a 3D numpy array with shape (bands, height, width)."""
+        return np.stack([g.data for g in self.grids], axis=0)
 
-    def to_bytes(self, dtype: DataType | None = None, driver: str = "") -> bytes:
+    def to_bytes(self, dtype: DataType | None = None, nodata: int | float | None = None, driver: str = "") -> bytes:
         """Serializes the stack to bytes (COG by default)."""
         with MemoryFile() as memory_file:
-            self.save(memory_file, dtype, driver)
+            self.save(memory_file, dtype, nodata, driver)
             return memory_file.read()
 
     def sam(
@@ -439,8 +484,8 @@ class Stack:
         hf_token: str | None = None,
         confidence_threshold: float = 0.5,
         tile_size: int = 1024,
-    ):
-        """Run Segment Anything Model 3 (SAM 3) over the stack with text prompts.
+    ) -> "SamResult":
+        """Applies the Segment Anything Model 3 (SAM 3) over the stack with text prompts.
 
         Args:
             prompt: One or more text prompts used for segmentation.
@@ -497,7 +542,7 @@ class Stack:
 
     def save(
         self, file: str | MemoryFile, dtype: DataType | None = None, nodata: int | float | None = None, driver: str = ""
-    ):
+    ) -> None:
         driver = driver or get_driver(file)
 
         if is_image_format(driver, file):
