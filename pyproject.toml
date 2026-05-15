@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "glidergun"
-version = "0.9.163"
+version = "0.9.182"
 description = "Map Algebra with NumPy"
 readme = "README.md"
 requires-python = ">=3.10"

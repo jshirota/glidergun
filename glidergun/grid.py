@@ -37,6 +37,7 @@ from glidergun.utils import format_type, get_crs, get_crs_name, get_nodata_value
 from glidergun.zonal import Zonal
 
 if TYPE_CHECKING:
+    from glidergun.loftr import Homography
     from glidergun.stac import Stack
 
 logger = logging.getLogger(__name__)
@@ -379,16 +380,53 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         """Assign extent and CRS to the current data without resampling."""
         return from_ndarray(self.data, extent, crs=get_crs(crs) if crs else self.crs)
 
-    def georeference_to(self, reference: "Grid | Stack"):
+    @overload
+    def georeference_to(
+        self,
+        reference: "Grid | Stack",
+        *,
+        max_loftr_side: int = 640,
+        confidence_threshold: float = 0.75,
+        tile_size: int | None = None,
+        tile_overlap: float = 0.2,
+        top_k: int = 2,
+        max_long_side: int | None = None,
+        resampling: Resampling | ResamplingMethod = "nearest",
+        homography_only: Literal[False] = False,
+    ) -> "Grid": ...
+
+    @overload
+    def georeference_to(
+        self,
+        reference: "Grid | Stack",
+        *,
+        max_loftr_side: int = 640,
+        confidence_threshold: float = 0.75,
+        tile_size: int | None = None,
+        tile_overlap: float = 0.2,
+        top_k: int = 2,
+        max_long_side: int | None = None,
+        resampling: Resampling | ResamplingMethod = "nearest",
+        homography_only: Literal[True],
+    ) -> "Homography": ...
+
+    @overload
+    def georeference_to(self, reference: "Homography") -> "Grid": ...
+
+    def georeference_to(
+        self, reference: "Grid | Stack | Homography", *, homography_only: bool = False, **kwargs
+    ) -> "Grid | Homography":
         """Automatically georeference to a reference grid or stack using scan + LoFTR."""
         try:
-            from glidergun.loftr import georeference_to_reference
+            from glidergun.loftr import Homography, georeference_to_reference
+
+            if isinstance(reference, Homography):
+                return georeference_to_reference(self, reference)
+            return georeference_to_reference(self, reference, homography_only=homography_only, **kwargs)
         except ImportError as ex:
             raise ImportError(
                 "This method requires the torch option.  Please install it with `pip install glidergun[torch]`."
             ) from ex
-
-        return georeference_to_reference(self, reference)
 
     def _reproject(self, transform, crs, width, height, resampling: Resampling | ResamplingMethod) -> "Grid":
         is_bool = self.dtype == "bool"
@@ -866,10 +904,13 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
             return self.local(lambda a: np.asanyarray(a, dtype=dtype))
         return self.local(lambda a: np.nan_to_num(a, nan=nan_to_num).astype(dtype))
 
-    def to_bytes(self, dtype: DataType | None = None, driver: str = "") -> bytes:
+    def to_array(self):
+        return np.stack([self.data], axis=0)
+
+    def to_bytes(self, dtype: DataType | None = None, nodata: int | float | None = None, driver: str = "") -> bytes:
         """Serialize grid to bytes (COG by default)."""
         with MemoryFile() as memory_file:
-            self.save(memory_file, dtype, driver)
+            self.save(memory_file, dtype, nodata, driver)
             return memory_file.read()
 
     def sam(
@@ -908,7 +949,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         )
 
     @overload
-    def save(self, file: str, dtype: DataType | None = None) -> None:
+    def save(self, file: str, dtype: DataType | None = None, nodata: int | float | None = None) -> None:
         """Saves the grid to a file.
 
         Most commonly, `.tif` extension is used to save as a GeoTIFF (COG).
@@ -920,21 +961,25 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         Args:
             file (str): File path (e.g. "output.tif").
             dtype (DataType | None): Data type for saving (optional).
+            nodata (int | float | None): NoData value for saving (optional).
         """
         ...
 
     @overload
-    def save(self, file: MemoryFile, dtype: DataType | None, driver: str) -> None:
+    def save(self, file: MemoryFile, dtype: DataType | None, nodata: int | float | None, driver: str) -> None:
         """Saves the grid to a memory file.
 
         Args:
             file (MemoryFile): Memory file to save the grid to.
             dtype (DataType | None): Data type for saving (optional).
+            nodata (int | float | None): NoData value for saving (optional).
             driver (str): Rasterio driver name (optional).
         """
         ...
 
-    def save(self, file: str | MemoryFile, dtype: DataType | None = None, driver: str = ""):
+    def save(
+        self, file: str | MemoryFile, dtype: DataType | None = None, nodata: int | float | None = None, driver: str = ""
+    ):
         g = self * 1 if self.dtype == "bool" else self
 
         if is_image_format(driver, file):
@@ -944,7 +989,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         if dtype is None:
             dtype = g.dtype
 
-        nodata = get_nodata_value(dtype)
+        nodata = get_nodata_value(dtype) if nodata is None else nodata
 
         if nodata is not None:
             g = g.coalesce(nodata)
@@ -1081,7 +1126,30 @@ def grid(  # type: ignore
 @overload
 def grid(
     data: ndarray,
-    extent: BBox | Affine | None = None,
+    extent: BBox | None = None,
+) -> Grid:
+    """Creates a new grid from an array.
+
+    Args:
+        data: Array.
+        extent: Map extent.
+
+    Example:
+        >>> grid(np.arange(12).reshape(3, 4))
+        image: 4x3 int32 | range: 0~11 | mean: 6 | std: 3 | crs: EPSG:4326 | cell: 0.25, 0.3333333333333333
+
+    Returns:
+        Grid: A new grid.
+    """
+    ...
+
+
+@overload
+def grid(
+    data: ndarray,
+    extent: Affine,
+    *,
+    crs: CRS | int | str = 4326,
 ) -> Grid:
     """Creates a new grid from an array.
 
@@ -1208,6 +1276,7 @@ def grid(  # type: ignore
     | Iterable[tuple[BaseGeometry, float] | tuple[float, float, float]],
     extent: BBox | Literal["#"] | Affine | None = None,
     *,
+    crs: CRS | int | str | None = None,
     cell_size: tuple[float, float] | float | None = None,
     resample_by: float | None = None,
     resampling: Resampling | ResamplingMethod | None = None,
@@ -1229,7 +1298,7 @@ def grid(  # type: ignore
 
         if isinstance(data, ndarray):
             w, h = data.shape[1], data.shape[0]
-            crs = extent.crs if isinstance(extent, Extent) else 4326
+            crs = extent.crs if isinstance(extent, Extent) else crs or 4326
             return from_ndarray(data, extent or (0, 0, w / 1000, h / 1000), crs)
         if isinstance(extent, Affine):
             raise ValueError("When extent is an Affine transform, data must be an ndarray.")

@@ -8,7 +8,7 @@ from base64 import b64encode
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Literal, Union, overload
+from typing import TYPE_CHECKING, Literal, Union, overload
 
 import numpy as np
 import PIL.Image as Image
@@ -43,6 +43,9 @@ from glidergun.plot import create_histogram, create_thumbnail
 from glidergun.quadkey import get_rows
 from glidergun.types import BBox, CellSize, Chart, Scaler
 from glidergun.utils import get_crs_name, get_driver, get_nodata_value, is_image_format, is_tile_url
+
+if TYPE_CHECKING:
+    from glidergun.loftr import Homography
 
 logger = logging.getLogger(__name__)
 
@@ -309,16 +312,53 @@ class Stack:
         """Assign extent and CRS to the current data without resampling."""
         return self.each(lambda g: g.georeference(extent, crs))
 
-    def georeference_to(self, reference: "Grid | Stack"):
+    @overload
+    def georeference_to(
+        self,
+        reference: "Grid | Stack",
+        *,
+        max_loftr_side: int = 640,
+        confidence_threshold: float = 0.75,
+        tile_size: int | None = None,
+        tile_overlap: float = 0.2,
+        top_k: int = 2,
+        max_long_side: int | None = None,
+        resampling: Resampling | ResamplingMethod = "nearest",
+        homography_only: Literal[False] = False,
+    ) -> "Stack": ...
+
+    @overload
+    def georeference_to(
+        self,
+        reference: "Grid | Stack",
+        *,
+        max_loftr_side: int = 640,
+        confidence_threshold: float = 0.75,
+        tile_size: int | None = None,
+        tile_overlap: float = 0.2,
+        top_k: int = 2,
+        max_long_side: int | None = None,
+        resampling: Resampling | ResamplingMethod = "nearest",
+        homography_only: Literal[True],
+    ) -> "Homography": ...
+
+    @overload
+    def georeference_to(self, reference: "Homography") -> "Stack": ...
+
+    def georeference_to(
+        self, reference: "Grid | Stack | Homography", *, homography_only: bool = False, **kwargs
+    ) -> "Stack | Homography":
         """Automatically georeference to a reference grid or stack using scan + LoFTR."""
         try:
-            from glidergun.loftr import georeference_to_reference
+            from glidergun.loftr import Homography, georeference_to_reference
+
+            if isinstance(reference, Homography):
+                return georeference_to_reference(self, reference)
+            return georeference_to_reference(self, reference, homography_only=homography_only, **kwargs)
         except ImportError as ex:
             raise ImportError(
                 "This method requires the torch option.  Please install it with `pip install glidergun[torch]`."
             ) from ex
-
-        return georeference_to_reference(self, reference)
 
     def mosaic(self, *stacks: "Stack", blend: bool = False):
         return self.each(lambda i, g: g.mosaic(*(s.grids[i - 1] for s in stacks), blend=blend))
@@ -392,7 +432,7 @@ class Stack:
     ):
         """Combines two stacks by applying a function to corresponding bands."""
         grids = []
-        for grid1, grid2 in zip(self.grids, other_stack.grids, strict=True):
+        for grid1, grid2 in zip(self.grids, other_stack.grids, strict=False):
             grid1, grid2 = standardize(grid1, grid2, extent=extent)
             grids.append(func(grid1, grid2))
         return stack(grids)
@@ -424,12 +464,12 @@ class Stack:
         return self.each(lambda g: g.type(dtype, nan_to_num))
 
     def to_array(self):
-        return np.stack([g.data for g in self.grids], axis=-1)
+        return np.stack([g.data for g in self.grids], axis=0)
 
-    def to_bytes(self, dtype: DataType | None = None, driver: str = "") -> bytes:
+    def to_bytes(self, dtype: DataType | None = None, nodata: int | float | None = None, driver: str = "") -> bytes:
         """Serializes the stack to bytes (COG by default)."""
         with MemoryFile() as memory_file:
-            self.save(memory_file, dtype, driver)
+            self.save(memory_file, dtype, nodata, driver)
             return memory_file.read()
 
     def sam(

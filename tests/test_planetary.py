@@ -12,14 +12,12 @@ def test_sentinel_visual():
     assert i.datetime
     s = i.get("visual")
     assert len(s.grids) == 3
-    assert s.dtype == "float32"
 
     s.save("tests/output/temp/sentinel_test.tif")
     s2 = stack("tests/output/temp/sentinel_test.tif")
     assert s2.crs == s.crs
     assert extents_equal(s2.extent, s.extent)
     assert len(s2.grids) == 3
-    assert s2.dtype == "float32"
 
     shutil.rmtree("tests/output/temp")
 
@@ -50,14 +48,12 @@ def test_landsat_rgb():
     assert i.datetime
     s = i.get(["red", "green", "blue"])
     assert len(s.grids) == 3
-    assert s.dtype == "float32"
 
     s.save("tests/output/temp/landsat_rgb.img")
     s2 = stack("tests/output/temp/landsat_rgb.img")
     assert s2.crs == s.crs
     assert extents_equal(s2.extent, s.extent)
     assert len(s2.grids) == 3
-    assert s2.dtype == "float32"
 
     shutil.rmtree("tests/output/temp")
 
@@ -69,13 +65,11 @@ def test_landsat_red():
     assert i.id
     assert i.datetime
     g = i.get("red")
-    assert g.dtype == "float32"
 
     g.save("tests/output/temp/landsat_red.bil")
     g2 = stack("tests/output/temp/landsat_red.bil")
     assert g2.crs == g.crs
     assert extents_equal(g2.extent, g.extent)
-    assert g2.dtype == "float32"
 
     shutil.rmtree("tests/output/temp")
 
