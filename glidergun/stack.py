@@ -350,16 +350,11 @@ class Stack:
         self, reference: "Grid | Stack | Homography", *, homography_only: bool = False, **kwargs
     ) -> "Stack | Homography":
         """Georeferences the stack to a reference grid or stack using scan + LoFTR."""
-        try:
-            from glidergun.loftr import Homography, georeference_to_reference
+        from glidergun.loftr import Homography, georeference_to_reference
 
-            if isinstance(reference, Homography):
-                return georeference_to_reference(self, reference)
-            return georeference_to_reference(self, reference, homography_only=homography_only, **kwargs)
-        except ImportError as ex:
-            raise ImportError(
-                "This method requires the torch option.  Please install it with `pip install glidergun[torch]`."
-            ) from ex
+        if isinstance(reference, Homography):
+            return georeference_to_reference(self, reference)
+        return georeference_to_reference(self, reference, homography_only=homography_only, **kwargs)
 
     def mosaic(self, *stacks: "Stack", blend: bool = False) -> "Stack":
         """Returns a stack mosaicked with other stacks, optionally blending overlapping areas."""
@@ -496,12 +491,7 @@ class Stack:
         Returns:
             SamResult: Collection of masks and an overview visualization stack.
         """
-        try:
-            from glidergun.sam import sam
-        except ImportError as ex:
-            raise ImportError(
-                "This method requires the torch option.  Please install it with `pip install glidergun[torch]`."
-            ) from ex
+        from glidergun.sam import sam
 
         return sam(
             self,

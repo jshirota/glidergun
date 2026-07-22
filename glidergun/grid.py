@@ -418,16 +418,11 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         self, reference: "Grid | Stack | Homography", *, homography_only: bool = False, **kwargs
     ) -> "Grid | Homography":
         """Georeferences the grid to a reference grid or stack using scan + LoFTR."""
-        try:
-            from glidergun.loftr import Homography, georeference_to_reference
+        from glidergun.loftr import Homography, georeference_to_reference
 
-            if isinstance(reference, Homography):
-                return georeference_to_reference(self, reference)
-            return georeference_to_reference(self, reference, homography_only=homography_only, **kwargs)
-        except ImportError as ex:
-            raise ImportError(
-                "This method requires the torch option.  Please install it with `pip install glidergun[torch]`."
-            ) from ex
+        if isinstance(reference, Homography):
+            return georeference_to_reference(self, reference)
+        return georeference_to_reference(self, reference, homography_only=homography_only, **kwargs)
 
     def _reproject(self, transform, crs, width, height, resampling: Resampling | ResamplingMethod) -> "Grid":
         is_bool = self.dtype == "bool"
@@ -929,12 +924,7 @@ class Grid(GridCore, Interpolation, Focal, Zonal):
         Returns:
             SamResult: Collection of masks and an overview visualization stack.
         """
-        try:
-            from glidergun.sam import sam
-        except ImportError as ex:
-            raise ImportError(
-                "This method requires the torch option.  Please install it with `pip install glidergun[torch]`."
-            ) from ex
+        from glidergun.sam import sam
 
         return sam(
             self.to_stack(),
