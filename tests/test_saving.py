@@ -1,10 +1,17 @@
 import hashlib
 import shutil
+import sys
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 import rasterio
+from shapely.geometry import Point
 
 from glidergun import grid, search
+from glidergun.geojson import FeatureCollection
+from glidergun.gis import add_to_map
+from glidergun.io import http_get
 
 
 @pytest.fixture(scope="session")
@@ -93,3 +100,76 @@ def test_saving_landsat_bil(landsat):
     hash, compress = save(landsat, "tests/output/temp/landsat.bil")
     assert hash
     assert compress is None
+
+
+def test_feature_collection_save_and_update(tmp_path):
+    collection = FeatureCollection(((Point(1, 2), {"name": "a"}),))
+    filtered = collection.filter(lambda feature: feature.properties["name"] == "a")
+    assert len(filtered.features) == 1
+    updated = filtered.update_geometry(lambda geometry: Point(geometry.x + 1, geometry.y))
+    assert updated.features[0].geometry.x == 2
+
+    bound = collection.bind(lambda feature: (feature,))
+    assert len(bound.features) == 1
+
+    text_file = tmp_path / "features.json"
+    collection.save(str(text_file))
+    assert text_file.exists()
+    assert '"FeatureCollection"' in text_file.read_text()
+
+
+def test_http_get_cache(tmp_path, monkeypatch):
+    calls = {"count": 0}
+
+    class Response:
+        content = b"payload"
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url):
+        calls["count"] += 1
+        return Response()
+
+    monkeypatch.setattr("glidergun.io.requests.get", fake_get)
+    url = "https://example.com/data"
+    assert http_get(url, str(tmp_path)) == b"payload"
+    assert http_get(url, str(tmp_path)) == b"payload"
+    assert calls["count"] == 1
+
+
+def test_add_to_map_qgis(monkeypatch, tmp_path):
+    g = grid(np.array([[1, 2], [3, 4]], dtype="float32"))
+
+    class QgsProject:
+        @staticmethod
+        def instance():
+            return SimpleNamespace(addMapLayer=lambda layer: setattr(g, "added", True))
+
+    class QgsProcessingUtils:
+        @staticmethod
+        def tempFolder():  # noqa: N802 - matches QGIS API
+            return str(tmp_path)
+
+    class QgsRasterLayer:
+        def __init__(self, *args):
+            self.args = args
+
+    qgis = SimpleNamespace(
+        QgsProcessingUtils=QgsProcessingUtils,
+        QgsProject=QgsProject,
+        QgsRasterLayer=QgsRasterLayer,
+        QgsVectorLayer=lambda *args: SimpleNamespace(args=args),
+    )
+    monkeypatch.setitem(sys.modules, "qgis.core", qgis)
+    monkeypatch.setattr("glidergun.gis.safe_filename", lambda name: name)
+
+    add_to_map(g, "test")
+    assert (tmp_path / "test.tif").exists()
+
+
+def test_add_to_map_without_gis(monkeypatch):
+    monkeypatch.delitem(sys.modules, "arcpy", raising=False)
+    monkeypatch.delitem(sys.modules, "qgis.core", raising=False)
+    with pytest.raises(RuntimeError, match="ArcGIS Pro or QGIS"):
+        add_to_map(grid(np.array([[1]], dtype="float32")), "test")

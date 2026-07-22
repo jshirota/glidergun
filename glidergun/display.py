@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
 
 def get_html(obj: Union[Grid, Stack, "ArtistAnimation", SamResult]):
+    from matplotlib.animation import ArtistAnimation
+
     if isinstance(obj, ArtistAnimation):
         return f"<div>{obj.to_jshtml()}</div>"
     if isinstance(obj, SamResult):

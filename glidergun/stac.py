@@ -249,10 +249,12 @@ def search(
         "bbox": list(search_extent),
         "limit": limit,
         "collections": [collection],
-        "query": {"eo:cloud_cover": {"lt": max_cloud_cover_percent}} | (query or {})
-        if max_cloud_cover_percent is not None
-        else query or {},
     }
+
+    if max_cloud_cover_percent is not None:
+        json["query"] = {"eo:cloud_cover": {"lt": max_cloud_cover_percent}} | (query or {})
+    elif query:
+        json["query"] = query
 
     if isinstance(datetime, tuple):
         datetime = "/".join(map(to_iso_string, datetime))
@@ -277,7 +279,11 @@ def search(
             data_extent = search_extent
         else:
             data_extent = Extent(*search_polygon.intersection(geometry).bounds, from_crs)
-        to_crs = CRS.from_epsg(feature["properties"]["proj:epsg"])
+        properties = feature["properties"]
+        if properties.get("proj:code"):
+            to_crs = CRS.from_string(properties["proj:code"])
+        else:
+            to_crs = CRS.from_epsg(properties["proj:epsg"])
         item = ItemBase.from_dict(feature)
         item.url = url
         item.extent = data_extent.project(to_crs)

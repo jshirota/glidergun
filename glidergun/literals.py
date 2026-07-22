@@ -4,20 +4,12 @@ Basemap = Literal[
     "esri",
     "google",
     "microsoft",
-    "dark",
-    "dark_labels",
-    "light",
-    "light_labels",
 ]
 
 BasemapUrl: dict[Basemap, str] = {
     "esri": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     "google": "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
     "microsoft": "https://t.ssl.ak.tiles.virtualearth.net/tiles/a{q}.jpeg?g=0",
-    "dark": "https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png",
-    "dark_labels": "https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png",
-    "light": "https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
-    "light_labels": "https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
 }
 
 ColorMap = Literal[

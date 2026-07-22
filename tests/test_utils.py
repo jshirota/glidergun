@@ -2,7 +2,17 @@ import numpy as np
 import pytest
 
 from glidergun import grid
-from glidergun.utils import format_type, get_nodata_value
+from glidergun.utils import (
+    format_type,
+    get_crs,
+    get_crs_name,
+    get_driver,
+    get_nodata_value,
+    is_image_format,
+    is_tile_url,
+    project,
+    safe_filename,
+)
 
 
 def test_format_type_float64():
@@ -106,3 +116,25 @@ def test_agg():
     g = grid("./data/n55_e008_1arc_v3.bil")
     assert g.img
     assert g.hist()
+
+
+def test_crs_and_coordinate_helpers():
+    assert get_crs(4326).to_epsg() == 4326
+    assert get_crs("4326").to_epsg() == 4326
+    assert get_crs_name(4326) != "Unknown"
+    assert project(0, 0, 4326, 3857) == (0.0, 0.0)
+
+    with pytest.raises(ValueError):
+        get_crs("not-a-crs")
+
+
+def test_format_and_filename_helpers(tmp_path):
+    assert get_driver("image.tif") == "COG"
+    assert get_driver("image.png") == "PNG"
+    assert is_image_format("", "image.png") is True
+    assert is_tile_url("https://example.com/{z}/{x}/{y}.png") is True
+    assert is_tile_url("https://example.com/image.png") is False
+
+    first = tmp_path / "image.txt"
+    first.write_text("first")
+    assert safe_filename(str(first)).endswith("image_1.txt")

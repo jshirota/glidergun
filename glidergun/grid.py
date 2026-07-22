@@ -1436,6 +1436,9 @@ def from_dem(
 
 
 def from_ndarray(data: ndarray, extent: BBox | Affine, crs: int | str | CRS) -> Grid:
+    if data.shape[0] == 0 or data.shape[1] == 0:
+        raise ValueError("Empty raster.")
+
     if isinstance(extent, Affine):
         transform = extent
     else:
